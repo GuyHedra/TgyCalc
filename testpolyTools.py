@@ -24,13 +24,7 @@ class test_plane_projection(unittest.TestCase):
             print(projection, projection.magnitude)
             self.assertEqual(projection_coords, projection)
 
-            # point = pt.Point((0, 0, 0))
-            # normal = pt.Point((-1, 0, 1))
-            # plane = pt.Plane(point, normal)
-            # vector = pt.Vector(pt.Point((0, 0, 0)), pt.Point((10, 0, 0)))
-            # projection = plane.projection(vector)
-            # print(projection, projection.magnitude)
-            # self.assertTrue(1 == 2/2)
+
 
 # class Test_Tendon(unittest.TestCase):
 #     def testtendonfunctionality(self):
