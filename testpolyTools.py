@@ -1,8 +1,9 @@
 import unittest
 import math
-import pickle
+# import pickle
 import polyTools as pt
-import things
+import main
+# import things
 # import testui
 
 
@@ -23,6 +24,7 @@ class test_plane_projection(unittest.TestCase):
             projection = plane.projection(vector)
             print(projection, projection.magnitude)
             self.assertEqual(projection_coords, projection)
+
 
 
 
