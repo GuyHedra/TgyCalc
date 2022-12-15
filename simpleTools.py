@@ -1,145 +1,144 @@
 import math
+import olof_1 as o1
+from numpy import array
 
 """ simpleTools.py is a simplified version of polyTools intended for use within TgyCalc"""
 
 
-class Point(tuple):
-    """ Point is used to store and operate on points and free vectors in 3-space.
-    Free vectors are vectors whose initial point is the origin """
-    length = 3
+class Vertex:
 
-    def __init__(self, coords):
-        tuple.__init__(self)
-        if (isinstance(coords, tuple) and len(coords) == self.length
-                and False not in [isinstance(coordinate, numbers.Number) for coordinate in coords]):
-            # Can't just assign coords to self.coords because coords could be of type Point and coords should be a tuple
-            self.coords = tuple(coords)
-        else:
-            raise TypeError('coords argument must be a 3 element tuple of Number')
+    def __init__(self, coordinates):
+        self.coordinates = coordinates
+        self.struts = []
+        self.tendons = []
 
-    @property
-    def x(self):
-        return self.coords[0]
+    def add_strut(self, strut):
+        self.struts.append(strut)
+
+    def add_tendon(self, tendon):
+        self.tendons.append(tendon)
 
     @property
-    def y(self):
-        return self.coords[1]
-
-    @property
-    def z(self):
-        return self.coords[2]
-
-    @property
-    def cyl_mag(self):
-        return (self.x ** 2 + self.y ** 2) ** 0.5
-
-    @property
-    def cyl_theta(self):
-        theta = math.acos(self.x / self.cyl_mag)
-        if self.y < 0:
-            theta = 2 * math.pi - theta
-        return theta
-
-    def translate(self, x_offset, y_offset, z_offset):
-        return Point((self.coords[0] + x_offset, self.coords[1] + y_offset, self.coords[2] + z_offset))
-
-    def rotate(self, center, axis, angle):
-        """ Rotates self about center and axis by angle radians.
-        Translates self such that center is at the origin, rotates self by angle radians about axis and then
-        translates self such that center is back at its original location"""
-        if not (isinstance(center, tuple) and len(center) == self.length):
-            raise TypeError('center must be a tuple of length 3')
-        if not (isinstance(axis, tuple) and len(axis) == self.length):
-            raise TypeError('axis must be a tuple of length 3')
-        if not isinstance(angle, numbers.Number):
-            raise TypeError('angle must be a number')
-        point = self - center
-        quat = axisangle_to_q(axis, angle)
-        return quat * point + center
-
-
-    def __add__(self, other):
-        """ adds self.coords to other element by element. Returns a Point object"""
-        if (isinstance(other, tuple) and len(other) == self.length and
-                False not in [isinstance(coord, numbers.Number) for coord in other]):
-            return Point(tuple([p_coordinate + o_coordinate
-                                for p_coordinate, o_coordinate in zip(self.coords, other)]))
-        else:
-            raise TypeError('other must have a length of 3 and all elements of other must be of type Number.')
-
-    def __radd__(self, other):
-        """ adds self.coords to other element by element. Invoked when Point object is 2nd operand.
-        Returns a Point object """
-        return self + other
+    def members(self):
+        return self.struts + self.tendons
 
     def __sub__(self, other):
-        """ subtracts other from self.coords element by element. Returns a Point object """
-        if (isinstance(other, tuple) and len(other) == 3 and
-                False not in [isinstance(coord, numbers.Number) for coord in other]):
-            return Point(tuple([p_coordinate - o_coordinate
-                                # for p_coordinate, o_coordinate in zip(self.coords, other)]))
-                                for p_coordinate, o_coordinate in zip(self, other)]))
+        return [self_coord - other_coord for self_coord, other_coord in zip(self.coordinates, other.coordinates)]
+
+
+class Strut:
+
+    def __init__(self, vertices):
+        self.vertices = vertices
+        self.force = 0
+
+    def force_vector(self, vertex):
+        if vertex is self.vertices[0]:
+            unit_vector = self.vertices[0] - self.vertices[1]
+        elif vertex is self.vertices[1]:
+            unit_vector = self.vertices[1] - self.vertices[0]
         else:
-            raise TypeError('other must have a length of 3 and all elements of other must be of type Number.')
+            raise Exception('Expected vertex to belong to member')
+        return [self.force * coord for coord in unit_vector]
 
-    def __rsub__(self, other):
-        """ subtracts self.coords from  other element by element. Invoked when Point object is 2nd operand.
-        Returns a Point object """
-        if (isinstance(other, tuple) and len(other) == 3 and
-                False not in [isinstance(coord, numbers.Number) for coord in other]):
-            return Point(tuple([o_coordinate - p_coordinate
-                                for p_coordinate, o_coordinate in zip(self.coords, other)]))
-        else:
-            raise TypeError('other must have a length of 3 and all elements of other must be of type Number.')
 
-    def __mul__(self, other):
-        """ multiplies self.coords by other element by element. Other must be a scalar Number.
-        Returns a Point object """
-        if isinstance(other, numbers.Number):
-            return Point(tuple([p_coordinate * other for p_coordinate in self.coords]))
-        else:
-            raise TypeError('other must be of type Number.')
+class Tendon:
 
-    def __rmul__(self, other):
-        """ multiplies self.coords by other element by element. Other must be a scalar Number.
-        Invoked when Point object is 2nd operand. Returns a Point object """
-        return self * other
+    def __init__(self, vertices):
+        self.vertices = vertices
+        self.force = 0
 
-    def __truediv__(self, other):
-        """ divides self.coords by other element by element. Other must be a scalar Number.
-        Returns a Point object """
-        if isinstance(other, numbers.Number):
-            return Point(tuple([p_coordinate / other for p_coordinate in self.coords]))
-        else:
-            raise TypeError('other must be of type Number.')
+    def force_vector(self, vertex):
+        if vertex is self.vertices[0]:
+            unit_vector = self.vertices[0] - self.vertices[1]
+        elif vertex is self.vertices[1]:
+            unit_vector = self.vertices[1] - self.vertices[0]
+        return [self.force * coord for coord in unit_vector]
 
-    def __neg__(self):
-        """ negates each coord"""
-        return Point((-self.coords[0], -self.coords[1], -self.coords[2]))
 
-    def __eq__(self, other, verbose=False):
-        if isinstance(other, tuple) and len(other) == self.length:
-            if False not in [abs(s_coord - o_coord) < tolerance
-                             for s_coord, o_coord in zip(self, other)]:
-                return True
-            else:
-                if verbose:
-                    print('Point.__eq__ info:', self, other, ' are not equal')
-                return False
-        elif other is None:
-            return False
-        else:
-            raise TypeError('bad operand for Point.__eq__', other.__class__)
+class Tensegrity:
+
+    def __init__(self, coordinates, strut_vertices, tendon_vertices):
+        self.vertices = [Vertex(coords) for coords in coordinates]
+        self.struts = [Strut([self.vertices[vtx_indices[0]], self.vertices[vtx_indices[1]]])
+                       for vtx_indices in strut_vertices]
+        self.tendons = [Tendon([self.vertices[vtx_indices[0]], self.vertices[vtx_indices[1]]])
+                        for vtx_indices in tendon_vertices]
+        self.populate_members()
 
     @property
-    def magnitude(self):
-        return sum([coord ** 2 for coord in self]) ** 0.5
+    def members(self):
+        return self.struts + self.tendons
+
+    def populate_members(self):
+        """ populate each vertex's list of tendons and struts"""
+        for member in self.members:
+            for vertex in member.vertices:
+                if member is Tendon:
+                    vertex.add_tendon(member)
+                elif member is Strut:
+                    vertex.add_strut(member)
 
     @property
-    def normalize(self):
-        """ return a unit vector parallel to the vector defined by the origin and self"""
-        mag = sum(coord * coord for coord in self) ** 0.5
-        if mag > tolerance:
-            return Point(tuple(coord / mag for coord in self))
-        else:
-            raise ValueError('Point magnitude too close to zero')
+    def vertex_array(self):
+        return array(self.coordinates)
+
+    @property
+    def strut_array(self):
+        return array(self.strut_vertices)
+
+    @property
+    def tendon_array(self):
+        return array(self.tendon_vertices)
+
+    @property
+    def member_forces(self):
+        return o1.solve_tensegrity_tensions(self.strut_array, self.tendon_array, self.vertex_array)
+
+    @property
+    def vertex_forces(self):
+        """ returns the net force on each vertex"""
+        force_vector_list = []
+        for vertex in self.vertices:
+            force_vector = array([0, 0, 0])
+            for member in vertex.members:
+                member_vector = member.force_vector(vertex)
+                force_vector = force_vector + array(member_vector)
+                # force_vector = force_vector + array(member.force_vector(vertex))
+            force_vector_list.append(force_vector)
+        return force_vector_list
+
+
+class Kite(Tensegrity):
+
+    def __init__(self):
+        self.coordinates = [[1, 0, 0], [0, 1, 0], [-1, 0, 0], [0, -1, 0]]
+        self.strut_vertices = [[0, 2], [1, 3]]
+        self.tendon_vertices = [[0, 1], [1, 2], [2, 3], [3, 0]]
+        Tensegrity.__init__(self, self.coordinates, self.strut_vertices, self.tendon_vertices)
+
+
+class Prism(Tensegrity):
+
+    def __init__(self):
+        alpha = 5 * math.pi / 6
+        self.coordinates = [[math.cos(0), math.sin(0), 0],
+                            [math.cos(2*math.pi/3), math.sin(2*math.pi/3), 0],
+                            [math.cos(4 * math.pi / 3), math.sin(4 * math.pi / 3), 0],
+                            [math.cos(alpha), math.sin(alpha), 1],
+                            [math.cos(alpha + 2 * math.pi / 3), math.sin(alpha + 2 * math.pi / 3), 1],
+                            [math.cos(alpha + 4 * math.pi / 3), math.sin(alpha + 4 * math.pi / 3), 1]]
+        # these numbers are indices in the vertices array for the vertices on either end of the member
+        self.strut_vertices = [[0, 3],
+                               [1, 4],
+                               [2, 5]]
+        self.tendon_vertices = [[0, 1],
+                                [1, 2],
+                                [2, 0],
+                                [3, 4],
+                                [4, 5],
+                                [5, 3],
+                                [1, 3],
+                                [2, 4],
+                                [0, 5]]
+        Tensegrity.__init__(self, self.coordinates, self.strut_vertices, self.tendon_vertices)
