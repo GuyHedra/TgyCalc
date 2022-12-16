@@ -5,12 +5,33 @@ from numpy import array
 """ simpleTools.py is a simplified version of polyTools intended for use within TgyCalc"""
 
 
+# def distance(point0, point1):
+#     """ Return the distance between two points"""
+#     return sum([(p0_coord - p1_coord) ** 2 for p0_coord, p1_coord in zip(point0, point1)]) ** 0.5
+
+def add_vectors(v0, v1):
+    return [c0 + c1 for c0, c1 in zip(v0, v1)]
+
+
+def dot_product(v0, v1):
+    """returns the dot product of two vectors"""
+    return sum([v0_coord * v1_coord for v0_coord, v1_coord in zip(v0, v1)])
+
+
+def normalize_vector(vector):
+    magnitude = sum([element ** 2 for element in vector]) ** 0.5
+    return [element / magnitude for element in vector]
+
+
 class Vertex:
 
     def __init__(self, coordinates):
         self.coordinates = coordinates
         self.struts = []
         self.tendons = []
+
+    def set_coordinates(self, coordinates):
+        self.coordinates = coordinates
 
     def add_strut(self, strut):
         self.struts.append(strut)
@@ -22,38 +43,84 @@ class Vertex:
     def members(self):
         return self.struts + self.tendons
 
+    def distance(self, other):
+        return sum(
+            [(p0_coord - p1_coord) ** 2 for p0_coord, p1_coord in zip(self.coordinates, other.coordinates)]) ** 0.5
+
     def __sub__(self, other):
         return [self_coord - other_coord for self_coord, other_coord in zip(self.coordinates, other.coordinates)]
 
 
-class Strut:
+class Member:
+
+    def xalglib_force_vector(self, vertex):
+        force_vector = self.unit_force_vector(vertex)  # debug
+        return [element * self.xalglib_force for element in self.unit_force_vector(vertex)]
+
+    def set_xalglib_force(self, force):
+        self.xalglib_force = force
+class Strut(Member):
 
     def __init__(self, vertices):
         self.vertices = vertices
-        self.force = 0
+        self.force = None
+        self.xalglib_force = None
 
-    def force_vector(self, vertex):
+    def unit_force_vector(self, vertex):
         if vertex is self.vertices[0]:
-            unit_vector = self.vertices[0] - self.vertices[1]
+            unit_vector = normalize_vector(self.vertices[0] - self.vertices[1])
         elif vertex is self.vertices[1]:
-            unit_vector = self.vertices[1] - self.vertices[0]
+            unit_vector = normalize_vector(self.vertices[1] - self.vertices[0])
         else:
             raise Exception('Expected vertex to belong to member')
-        return [self.force * coord for coord in unit_vector]
+        return unit_vector
+
+    # def set_xalglib_force(self, force):
+    #     self.xalglib_force = force
 
 
-class Tendon:
-
+class Tendon(Member):
+# todo add class member and collect all things common to tendon and strut
     def __init__(self, vertices):
         self.vertices = vertices
-        self.force = 0
+        self.force = None
+        self.xalglib_force = None
+        self.nom_length = self.current_length  # set initial nom_length to current length
+        self.spring_constant = 1
 
-    def force_vector(self, vertex):
-        if vertex is self.vertices[0]:
-            unit_vector = self.vertices[0] - self.vertices[1]
-        elif vertex is self.vertices[1]:
-            unit_vector = self.vertices[1] - self.vertices[0]
-        return [self.force * coord for coord in unit_vector]
+    # def force_vector(self, vertex):
+    #     if vertex is self.vertices[0]:
+    #         unit_vector = self.vertices[0] - self.vertices[1]
+    #     elif vertex is self.vertices[1]:
+    #         unit_vector = self.vertices[1] - self.vertices[0]
+    #     return [self.force_magnitude * coord for coord in unit_vector]
+
+    def unit_force_vector(self, vertex):
+        if vertex is self.vertices[1]:
+            unit_vector = normalize_vector(self.vertices[0] - self.vertices[1])
+        elif vertex is self.vertices[0]:
+            unit_vector = normalize_vector(self.vertices[1] - self.vertices[0])
+        else:
+            raise Exception('Expected vertex to belong to member')
+        return unit_vector
+
+    # def set_xalglib_force(self, force):
+    #     self.xalglib_force = force
+
+    def set_nom_length(self, nom_length):
+        self.nom_length = nom_length
+
+    @property
+    def current_length(self):
+        return self.vertices[0].distance(self.vertices[1])
+
+    @property
+    def force_magnitude(self):
+        if self.current_length > self.nom_length:
+            mag = self.spring_constant * (self.current_length - self.nom_length)
+        else:
+            mag = 0
+        return mag
 
 
 class Tensegrity:
@@ -65,23 +132,30 @@ class Tensegrity:
         self.tendons = [Tendon([self.vertices[vtx_indices[0]], self.vertices[vtx_indices[1]]])
                         for vtx_indices in tendon_vertices]
         self.populate_members()
+        pass
 
     @property
     def members(self):
         return self.struts + self.tendons
 
     def populate_members(self):
-        """ populate each vertex's list of tendons and struts"""
-        for member in self.members:
+        """ populate each vertex's list of tendons and struts (members) and store xalglib forces in each member"""
+        xalglib_forces = self.xalglib_member_forces
+        if len(xalglib_forces) != len(self.members):
+            raise Exception('expected xalglib_forces to be same length as self.members')
+        for member, force in zip(self.members, xalglib_forces):
+            member.set_xalglib_force(force)
             for vertex in member.vertices:
-                if member is Tendon:
+                if isinstance(member, Tendon):
                     vertex.add_tendon(member)
-                elif member is Strut:
+                elif isinstance(member, Strut):
                     vertex.add_strut(member)
+                else:
+                    raise Exception('expected member to be instance of Strut or Tendon')
 
     @property
     def vertex_array(self):
-        return array(self.coordinates)
+        return array([vertex.coordinates for vertex in self.vertices])
 
     @property
     def strut_array(self):
@@ -92,19 +166,28 @@ class Tensegrity:
         return array(self.tendon_vertices)
 
     @property
-    def member_forces(self):
+    def xalglib_member_forces(self):
         return o1.solve_tensegrity_tensions(self.strut_array, self.tendon_array, self.vertex_array)
 
     @property
-    def vertex_forces(self):
-        """ returns the net force on each vertex"""
+    def xalglib_vertex_forces(self):
+        """ returns the net force on each vertex based on xalglib"""
         force_vector_list = []
+        xalglib_forces = self.xalglib_member_forces
+        i_xalglib = 0
         for vertex in self.vertices:
             force_vector = array([0, 0, 0])
             for member in vertex.members:
-                member_vector = member.force_vector(vertex)
-                force_vector = force_vector + array(member_vector)
-                # force_vector = force_vector + array(member.force_vector(vertex))
+                member_vector = member.xalglib_force_vector(vertex)
+                # dot = dot_product(vertex.members[0].unit_force_vector(vertex), member_vector)
+                # interim_vector = [element * xalglib_forces[i_xalglib] *
+                #                   dot_product(vertex.members[0].unit_force_vector(vertex), member_vector)
+                #                   for element in member_vector]
+                # interim_vector = [element * xalglib_forces[i_xalglib] for element in member_vector]
+                # force_vector = add_vectors(force_vector, array(member_vector) * xalglib_forces[i_xalglib])
+                force_vector = add_vectors(force_vector, member_vector)
+                pass
+            i_xalglib += 1
             force_vector_list.append(force_vector)
         return force_vector_list
 
@@ -112,10 +195,26 @@ class Tensegrity:
 class Kite(Tensegrity):
 
     def __init__(self):
-        self.coordinates = [[1, 0, 0], [0, 1, 0], [-1, 0, 0], [0, -1, 0]]
+        coordinates = [[1, 0, 0], [0, 1, 0], [-1, 0, 0], [0, -1, 0]]
         self.strut_vertices = [[0, 2], [1, 3]]
         self.tendon_vertices = [[0, 1], [1, 2], [2, 3], [3, 0]]
-        Tensegrity.__init__(self, self.coordinates, self.strut_vertices, self.tendon_vertices)
+        Tensegrity.__init__(self, coordinates, self.strut_vertices, self.tendon_vertices)
+
+
+class PinnedKite(Tensegrity):
+    """ struts are attached by a pivot at their midpoints and the angle between struts (theta) is changed to reach
+    a force equilibrium """
+
+    def __init__(self):
+        coordinates = [[1, 0, 0], [0, 1, 0], [-1, 0, 0], [0, -1, 0]]
+        self.strut_vertices = [[0, 2], [1, 3]]
+        self.tendon_vertices = [[0, 1], [1, 2], [2, 3], [3, 0]]
+        Tensegrity.__init__(self, coordinates, self.strut_vertices, self.tendon_vertices)
+
+    def set_strut_theta(self, theta):
+        """ assumes that both struts have their midpoints at [0, 0, 0] and have a length of 2"""
+        self.struts[0].vertices[0].set_coordinates([math.cos(theta), math.sin(theta), 0])
+        self.struts[0].vertices[1].set_coordinates([-math.cos(theta), -math.sin(theta), 0])
 
 
 class Prism(Tensegrity):

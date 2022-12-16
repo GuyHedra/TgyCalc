@@ -9,10 +9,19 @@ import simpleTools as sT
 if __name__ == '__main__':
     print('*** kite forces ***')
     kite = sT.Kite()
-    print('kite member forces', kite.member_forces)
-    print('kite vertex forces', kite.vertex_forces)
+    print('kite xalglib member forces', kite.xalglib_member_forces)
+    print('kite xalglib vertex forces', kite.xalglib_vertex_forces)
     #
     prism = sT.Prism()
     print('*** prism forces')
-    print('prism member forces', prism.member_forces)
-    print('prism vertex forces', prism.vertex_forces)
+    print('prism xalglib member forces', prism.xalglib_member_forces)
+    print('prism xalglib vertex forces', prism.xalglib_vertex_forces)
+    #
+    pinned_kite = sT.PinnedKite()
+    print('*** initial pinned kite forces ***')
+    print('kite xalglib member forces', pinned_kite.xalglib_member_forces)
+    print('kite xalglib vertex forces', pinned_kite.xalglib_vertex_forces)
+    pinned_kite.set_strut_theta(math.pi/10)
+    print('*** twisted pinned kite forces ***')
+    print('kite xalglib member forces', pinned_kite.xalglib_member_forces)
+    print('kite xalglib vertex forces', pinned_kite.xalglib_vertex_forces)
