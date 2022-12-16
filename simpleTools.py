@@ -5,10 +5,6 @@ from numpy import array
 """ simpleTools.py is a simplified version of polyTools intended for use within TgyCalc"""
 
 
-# def distance(point0, point1):
-#     """ Return the distance between two points"""
-#     return sum([(p0_coord - p1_coord) ** 2 for p0_coord, p1_coord in zip(point0, point1)]) ** 0.5
-
 def add_vectors(v0, v1):
     return [c0 + c1 for c0, c1 in zip(v0, v1)]
 
@@ -52,35 +48,7 @@ class Vertex:
 
 
 class Member:
-
-    def xalglib_force_vector(self, vertex):
-        force_vector = self.unit_force_vector(vertex)  # debug
-        return [element * self.xalglib_force for element in self.unit_force_vector(vertex)]
-
-    def set_xalglib_force(self, force):
-        self.xalglib_force = force
-class Strut(Member):
-
-    def __init__(self, vertices):
-        self.vertices = vertices
-        self.force = None
-        self.xalglib_force = None
-
-    def unit_force_vector(self, vertex):
-        if vertex is self.vertices[0]:
-            unit_vector = normalize_vector(self.vertices[0] - self.vertices[1])
-        elif vertex is self.vertices[1]:
-            unit_vector = normalize_vector(self.vertices[1] - self.vertices[0])
-        else:
-            raise Exception('Expected vertex to belong to member')
-        return unit_vector
-
-    # def set_xalglib_force(self, force):
-    #     self.xalglib_force = force
-
-
-class Tendon(Member):
-# todo add class member and collect all things common to tendon and strut
+    """ base class for tendons and struts"""
     def __init__(self, vertices):
         self.vertices = vertices
         self.force = None
@@ -88,24 +56,12 @@ class Tendon(Member):
         self.nom_length = self.current_length  # set initial nom_length to current length
         self.spring_constant = 1
 
-    # def force_vector(self, vertex):
-    #     if vertex is self.vertices[0]:
-    #         unit_vector = self.vertices[0] - self.vertices[1]
-    #     elif vertex is self.vertices[1]:
-    #         unit_vector = self.vertices[1] - self.vertices[0]
-    #     return [self.force_magnitude * coord for coord in unit_vector]
+    def xalglib_force_vector(self, vertex):
+        force_vector = self.unit_force_vector(vertex)  # debug
+        return [element * self.xalglib_force for element in self.unit_force_vector(vertex)]
 
-    def unit_force_vector(self, vertex):
-        if vertex is self.vertices[1]:
-            unit_vector = normalize_vector(self.vertices[0] - self.vertices[1])
-        elif vertex is self.vertices[0]:
-            unit_vector = normalize_vector(self.vertices[1] - self.vertices[0])
-        else:
-            raise Exception('Expected vertex to belong to member')
-        return unit_vector
-
-    # def set_xalglib_force(self, force):
-    #     self.xalglib_force = force
+    def set_xalglib_force(self, force):
+        self.xalglib_force = force
 
     def set_nom_length(self, nom_length):
         self.nom_length = nom_length
@@ -121,6 +77,46 @@ class Tendon(Member):
         else:
             mag = 0
         return mag
+
+    def unit_force_vector(self, vertex):
+        if (vertex is self.vertices[0] and isinstance(self, Strut)) or \
+                (vertex is self.vertices[1] and isinstance(self, Tendon)):
+            unit_vector = normalize_vector(self.vertices[0] - self.vertices[1])
+        elif (vertex is self.vertices[1] and isinstance(self, Strut)) or \
+                (vertex is self.vertices[0] and isinstance(self, Tendon)):
+            unit_vector = normalize_vector(self.vertices[1] - self.vertices[0])
+        else:
+            raise Exception('Expected vertex to belong to member')
+        return unit_vector
+
+
+class Strut(Member):
+
+    def __init__(self, vertices):
+        Member.__init__(self, vertices)
+
+    def unit_force_vector(self, vertex):
+        if vertex is self.vertices[0]:
+            unit_vector = normalize_vector(self.vertices[0] - self.vertices[1])
+        elif vertex is self.vertices[1]:
+            unit_vector = normalize_vector(self.vertices[1] - self.vertices[0])
+        else:
+            raise Exception('Expected vertex to belong to member')
+        return unit_vector
+
+
+class Tendon(Member):
+    def __init__(self, vertices):
+        Member.__init__(self, vertices)
+
+    def unit_force_vector(self, vertex):
+        if vertex is self.vertices[1]:
+            unit_vector = normalize_vector(self.vertices[0] - self.vertices[1])
+        elif vertex is self.vertices[0]:
+            unit_vector = normalize_vector(self.vertices[1] - self.vertices[0])
+        else:
+            raise Exception('Expected vertex to belong to member')
+        return unit_vector
 
 
 class Tensegrity:
@@ -178,14 +174,7 @@ class Tensegrity:
         for vertex in self.vertices:
             force_vector = array([0, 0, 0])
             for member in vertex.members:
-                member_vector = member.xalglib_force_vector(vertex)
-                # dot = dot_product(vertex.members[0].unit_force_vector(vertex), member_vector)
-                # interim_vector = [element * xalglib_forces[i_xalglib] *
-                #                   dot_product(vertex.members[0].unit_force_vector(vertex), member_vector)
-                #                   for element in member_vector]
-                # interim_vector = [element * xalglib_forces[i_xalglib] for element in member_vector]
-                # force_vector = add_vectors(force_vector, array(member_vector) * xalglib_forces[i_xalglib])
-                force_vector = add_vectors(force_vector, member_vector)
+                force_vector = add_vectors(force_vector, member.xalglib_force_vector(vertex))
                 pass
             i_xalglib += 1
             force_vector_list.append(force_vector)
