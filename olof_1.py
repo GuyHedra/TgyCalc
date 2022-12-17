@@ -95,7 +95,7 @@ def find_positive_solutions(matrix):
     xalglib.minlpsetlc2dense(state, matrix.tolist(), range_zeros, range_zeros)  # here is where we can set error limits
     xalglib.minlpoptimize(state)
     x, rep = xalglib.minlpresults(state)
-    print(rep.terminationtype)
+    print('alglib termination type: ', rep.terminationtype)
     if rep.terminationtype > 0:
         return x
     else:

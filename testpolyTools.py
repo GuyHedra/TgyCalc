@@ -38,7 +38,7 @@ class test_plane_projection(unittest.TestCase):
 #         #                              strut_segment_count=self.strut_segment_count,
 #         #                              strut_wall_thickness=self.strut_wall_thickness,
 #         #                              vertex_group_name='strut')
-#         # struts = blend.draw_struts(strut, ph)
+#         # strut = blend.draw_struts(strut, ph)
 #         # if self.strut_type in ['cylinder', 'tube']:
 #         # #     ph.tendon_end_points(self.strut_radii)
 #         # tendon = blend.add_tendon_mesh(tendon_radius=self.tendon_radius,
