@@ -26,16 +26,29 @@ def normalize_vector(vector):
     magnitude = sum([element ** 2 for element in vector]) ** 0.5
     return [element / magnitude for element in vector]
 
+def cartesian_coordinates(cyl_coords):
+    """ cylindrical are [rho(r), phi(azimuth), z]"""
+    rho, phi, z = cyl_coords
+    return [rho * math.cos(phi), rho * math.sin(phi), z]
+
 
 class Vertex:
 
-    def __init__(self, coordinates):
-        self.coordinates = coordinates
+    def __init__(self, cartesian=None, cylindrical=None):
+        if cylindrical:
+            self.coordinates = cartesian_coordinates(cylindrical)
+        elif cartesian:
+            self.coordinates = cartesian
+        else:
+            raise Exception('Either cartesian or cylindrical must be passed')
         self.strut = None
         self.tendons = []
 
-    def set_coordinates(self, coordinates):
-        self.coordinates = coordinates
+    def set_coordinates(self, coordinates, cyl_coords=None):
+        if cyl_coords:
+            self.coordinates = cartesian_coordinates(cyl_coords)
+        else:
+            self.coordinates = coordinates
 
     def set_strut(self, strut):
         self.strut = strut
@@ -118,8 +131,12 @@ class Strut(Member):
         self.member_type = 'Strut '
 
     @property
-    def spring_force_sum(self):
+    def spring_force_vector_sum(self):
         return vector_add(self.vertices[0].tendon_spring_force_vector, self.vertices[1].tendon_spring_force_vector)
+
+    @property
+    def spring_force_magnitude(self):
+        return sum([e ** 2 for e in self.spring_force_vector_sum]) ** 0.5
 
 
 class Tendon(Member):
@@ -145,7 +162,6 @@ class Tensegrity:
         self.tendons = [Tendon([self.vertices[vtx_indices[0]], self.vertices[vtx_indices[1]]])
                         for vtx_indices in tendon_vertices]
         self.populate_members()
-        pass
 
     @property
     def members(self):
@@ -154,17 +170,21 @@ class Tensegrity:
     def populate_members(self):
         """ populate each vertex's list of tendons and strut (members) and store xalglib forces in each member"""
         xalglib_forces = self.xalglib_member_forces
-        if len(xalglib_forces) != len(self.members):
-            raise Exception('expected xalglib_forces to be same length as self.members')
-        for member, force in zip(self.members, xalglib_forces):
-            member.set_xalglib_force(force)
-            for vertex in member.vertices:
-                if isinstance(member, Tendon):
-                    vertex.add_tendon(member)
-                elif isinstance(member, Strut):
-                    vertex.set_strut(member)
-                else:
-                    raise Exception('expected member to be instance of Strut or Tendon')
+        if xalglib_forces:
+            if len(xalglib_forces) != len(self.members):
+                raise Exception('expected xalglib_forces to be same length as self.members')
+            for member, force in zip(self.members, xalglib_forces):
+                member.set_xalglib_force(force)
+        else:
+            for member in self.members:
+                for vertex in member.vertices:
+                    if isinstance(member, Tendon):
+                        vertex.add_tendon(member)
+                    elif isinstance(member, Strut):
+                        vertex.set_strut(member)
+                    else:
+                        raise Exception('expected member to be instance of Strut or Tendon')
+            print('*** Warning! xalglib_forces == None ***')
 
     @property
     def vertex_array(self):
@@ -172,11 +192,17 @@ class Tensegrity:
 
     @property
     def strut_array(self):
-        return array(self.strut_vertices)
+        # s_array = []
+        # for strut in self.struts:
+        #     s_array.append([self.vertices.index(strut.vertices[0]), self.vertices.index(strut.vertices[1])])
+        return [[self.vertices.index(strut.vertices[0]), self.vertices.index(strut.vertices[1])]
+                for strut in self.struts]
+        # return array(self.strut_vertices)
 
     @property
     def tendon_array(self):
-        return array(self.tendon_vertices)
+        return [[self.vertices.index(tendon.vertices[0]), self.vertices.index(tendon.vertices[1])]
+                for tendon in self.tendons]
 
     @property
     def xalglib_member_forces(self):
@@ -192,15 +218,26 @@ class Tensegrity:
             force_vector = array([0, 0, 0])
             for member in vertex.members:
                 force_vector = vector_add(force_vector, member.xalglib_force_vector(vertex))
-                pass
             i_xalglib += 1
             force_vector_list.append(force_vector)
         return force_vector_list
+
+    def set_nom_tendon_lengths(self, factor):
+        """ factor is typically less than 1.0"""
+        for tendon in self.tendons:
+            tendon.set_nom_length(factor)
+
+    def equilibrium(self, err_tol=0.01):
+        return True not in [strut.spring_force_magnitude > err_tol for strut in self.struts]
 
     def print_spring_forces(self):
         type_width = len('vertex')
         coord_width = 20
         round_param = 2
+        if self.equilibrium:
+            print('*** This tensegrity is in equilibrium ***')
+        else:
+            print('*** This tensegrity is NOT in equilibrium ***')
         print('*      Coordinates          Tendon Force Vector')
         for vertex in self.vertices:
             print('Vertex',
@@ -220,7 +257,7 @@ class Tensegrity:
             print(f'{strut.member_type: <{type_width}}',
                   f'{str(around(array(strut.vertices[0].coordinates), round_param)): <{coord_width}}',
                   f'{str(around(array(strut.vertices[1].coordinates), round_param)): <{coord_width}}',
-                  str(around(array(strut.spring_force_sum), round_param)))
+                  str(around(array(strut.spring_force_vector_sum), round_param)))
 
 
 class Kite(Tensegrity):
@@ -230,6 +267,25 @@ class Kite(Tensegrity):
         self.strut_vertices = [[0, 2], [1, 3]]
         self.tendon_vertices = [[0, 1], [1, 2], [2, 3], [3, 0]]
         Tensegrity.__init__(self, coordinates, self.strut_vertices, self.tendon_vertices)
+
+    def solver_strut_0x(self):
+        """ Moves struts[0] along x axis until kite is in equilibrium. Assumes the required symmetries exist """
+        initial_step = 0.01
+        max_step_count = 100
+        step_count = 0
+        while not self.equilibrium(err_tol=0.1):
+            if step_count > max_step_count:
+                print('**** max_step_count reached ****')
+                break
+            error_signal = dot_product([1, 0, 0], self.struts[0].spring_force_vector_sum)
+            if error_signal < 0:
+                step = -initial_step
+            else:
+                step = initial_step
+            for vertex in self.struts[0].vertices:
+                vertex.coordinates = vector_add([step, 0, 0], vertex.coordinates)
+            print('solver: spring_force_vector_sum',  self.struts[0].spring_force_vector_sum)
+            step_count += 1
 
 
 class PinnedKite(Tensegrity):
@@ -243,20 +299,77 @@ class PinnedKite(Tensegrity):
         Tensegrity.__init__(self, coordinates, self.strut_vertices, self.tendon_vertices)
         self.set_nom_tendon_lengths(0.9)
 
-
     def set_strut_theta(self, theta):
         """ assumes that both strut have their midpoints at [0, 0, 0] and have a length of 2"""
         self.struts[1].vertices[0].set_coordinates([math.cos(theta), math.sin(theta), 0])
         self.struts[1].vertices[1].set_coordinates([-math.cos(theta), -math.sin(theta), 0])
 
-    def set_nom_tendon_lengths(self, factor):
-        """ factor is typically less than 1.0"""
-        for tendon in self.tendons:
-            tendon.set_nom_length(factor)
-
 
 class Prism(Tensegrity):
+    """ Intended to be used as demo with solver """
+    def __init__(self, n):
+        self.n = n  # strut count
+        self.strut_len = 10
+        self.bot_radius = 5
+        self.top_radius = 5
+        self.strut_rho = math.pi / 2
+        bot_coordinates = []
+        top_coordinates = []
+        s_vertices = []
+        bot_t_vertices = []
+        top_t_vertices = []
+        vertical_t_vertices = []
+        # we will initialize the prism with vertical struts and let the solver find the correct strut_rho, where
+        # strut_rho is the angle between the xy plane and each strut
+        # the solver will use vary strut_rho until a stable solution is found
+        theta_step = 2 * math.pi / self.n
+        phi = 0
+        z_bot = 0
+        z_top = self.strut_len
+        for i in range(self.n):
+            bot_coordinates.append(cartesian_coordinates([self.bot_radius, phi, z_bot]))
+            top_coordinates.append(cartesian_coordinates([self.bot_radius, phi, z_top]))
+            bot_t_vertices.append([i, (i + 1) % self.n])
+            top_t_vertices.append([i + n, (i + 1) % self.n + self.n])
+            vertical_t_vertices.append([i, (i + 1) % self.n + self.n])
+            s_vertices.append([i, i + self.n])
+            phi += theta_step
+        Tensegrity.__init__(self, bot_coordinates + top_coordinates, s_vertices,
+                            bot_t_vertices + top_t_vertices + vertical_t_vertices)
 
+    def solver_strut(self):
+        """ attempts to reach equilibrium by changing position of the top of the struts. Keeps all radial symmetries"""
+        err_tol = 0.1
+        max_steps = 1000
+        # step_sizes = [5 * err_tol, 2 * err_tol, 0.9 * err_tol]
+        step_size = 1.5 * err_tol  # 1.9 should work
+        phi_direction = -1
+        # i_step_size = 0
+        step_count = 0
+        while not self.equilibrium(err_tol=err_tol):
+            # modify phi (spherical polar angle) of top vertex in all struts equally
+            for strut in self.struts:
+                # strut.modify_phi(phi_direction * step_sizes[i_step_size])
+                initial_strut_force_mag = self.struts[0].spring_force_magnitude
+                strut.modify_phi(phi_direction * step_size)
+                if self.struts[0].spring_force_magnitude > initial_strut_force_mag:
+                    # if we are going the wrong way then reverse direction
+                    phi_direction = -phi_direction
+                    # phi_better = False
+                elif self.struts[0].spring_force_magnitude == initial_strut_force_mag:
+                    raise Exception('no change in spring force found after change in phi')
+                initial_strut_force_mag = self.struts[0].spring_force_magnitude
+                strut.modify_phi(phi_direction * step_size)
+
+                # else:
+                # phi_better = True
+            step_count += 1
+            if step_count > max_steps:
+                raise Exception('max step count exceeded')
+            # modify theta (spherical azimuthal angle) of top vertex in all struts equally
+
+class PrismNeq3(Tensegrity):
+    """ N = 3 prism from olof_1.py"""
     def __init__(self):
         alpha = 5 * math.pi / 6
         self.coordinates = [[math.cos(0), math.sin(0), 0],
