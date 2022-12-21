@@ -38,8 +38,10 @@ def calculate_kite_tensions():
     return solve_tensegrity_tensions(compression_members, tension_members, vertices)
 
 
-def solve_tensegrity_tensions(compression_members, tension_members, vertices):
+def solve_tensegrity_tensions(compression_members, tension_members, vertices, verbose=False):
     matrix = build_tensegrity_matrix(compression_members, tension_members, vertices)
+    if verbose:
+        print('* alglib matrix *\n', matrix)
     return find_positive_solutions(matrix)
 
 
@@ -53,7 +55,7 @@ def build_tensegrity_matrix(compression_members, tension_members, vertices):
 
 
 # Sign = +1 for compression, -1 for tension
-def build_tensegrity_matrix_block(members, vertices, sign):
+def build_tensegrity_matrix_block(members, vertices, sign, verbose=False):
     # TODO: this whole method seems like it could be cleaned up significantly
     result = None
     for member in members:
