@@ -545,13 +545,16 @@ class Tensegrity:
         rotational and we will rotate the strut"""
         step_count = 0
         translate_threshold = 0
-        step = initial_step
+        # step = initial_step
+        for strut in self.struts:
+            strut.step = initial_step
         while not self.equilibrium(err_tol=err_tol) and step_count < max_step_count:
             for strut in self.struts:
+                strut.previous_force_vector_sum = strut.spring_force_vector_sum
                 # dot product less than threshold, or strut anchored, so rotate
                 if (dot_product(strut.vertices[0].spring_force_vector, strut.vertices[1].spring_force_vector) <
                         translate_threshold or strut.anchor):
-                    angle = math.asin(step / strut.current_length)
+                    angle = math.asin(strut.step / strut.current_length)
                     if (vector_mag(strut.vertices[0].spring_force_vector) >
                             vector_mag(strut.vertices[1].spring_force_vector)) or strut.vertices[1].anchor:
                         rotation_vertex = strut.vertices[0]
@@ -568,18 +571,27 @@ class Tensegrity:
                 else:
                     # dot product greater than threshold, so translate
                     if verbose:
-                        print('>> solver translation', step)
-                    strut.translate(step)
+                        print('>> solver translation', strut.step)
+                    strut.translate(strut.step)
+                if dot_product(strut.previous_force_vector_sum, strut.spring_force_vector_sum) < 0:
+                    strut.step = strut.step/2
+                    print('*** detected an overshoot ***')
+            if verbose:
+                print('step count:', step_count)
             step_count += 1
+            #debug
+            if step_count == 14:
+                print('*****step count 14')
             if verbose:
                 print('strut[0] force mag', self.struts[0].spring_force_magnitude,
                       'strut[1] force mag', self.struts[1].spring_force_magnitude)
-                # print('>> solver strut[0]',
-                #       self.struts[0].vertices[0].coordinates,
-                #       self.struts[0].vertices[1].coordinates,
-                #       'strut[1]',
-                #       self.struts[1].vertices[0].coordinates,
-                #       self.struts[1].vertices[1].coordinates)
+                print('>> solver strut[0]',
+                      self.struts[0].vertices[0].coordinates,
+                      self.struts[0].vertices[1].coordinates,
+                      'spring force sum', self.struts[0].spring_force_vector_sum
+                      'strut[1]',
+                      self.struts[1].vertices[0].coordinates,
+                      self.struts[1].vertices[1].coordinates)
         if verbose:
             print('>> solver used ', step_count, ' steps')
 # end class Tensegrity
