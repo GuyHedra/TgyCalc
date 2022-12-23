@@ -4,6 +4,7 @@ from numpy import array, around
 import numbers
 from scipy.spatial.transform import Rotation as R
 
+# todo: consider using numpy arrays for all vectors and coordinates, hopefully can use their funcs instead of homegrown
 """ simpleTools.py is a simplified version of polyTools intended for use within TgyCalc"""
 
 
@@ -35,7 +36,7 @@ def cross_product(vector0, vector1):
             vector0[0] * vector1[1] - vector0[1] * vector1[0]]
 
 
-def normalize_vector(vector):
+def normalize(vector):
     magnitude = sum([element ** 2 for element in vector]) ** 0.5
     if magnitude != 0:
         return [element / magnitude for element in vector]
@@ -277,20 +278,30 @@ class Vertex:
         point = self - center
         r = R.from_rotvec(angle * array(axis))
         interim_coordinates = r.apply(point)
-        self.coordinates = interim_coordinates + center
+        # coordinates = interim_coordinates + center.coordinates
+        self.coordinates = interim_coordinates + center.coordinates
         # quat = axis_angle_to_quaternion(axis, angle)
         # self.coordinates = quat * point + center
+
+    @property
+    def lateral_f(self):
+        #cos(pi/4) = 2 ** 0.5 / 2
+        return abs(dot_product(normalize(self.force_vector), normalize(self.strut.axis_vector(self)))) < 2 ** 0.5 / 2
+
+    @property
+    def longitudinal_f(self):
+        return not self.lateral_f
 
     @property
     def members(self):
         return [self.strut] + self.tendons
 
     @property
-    def spring_force_vector(self):
+    def force_vector(self):
         """ returns the vector sum af all tendon spring forces acting on this vertex """
         force_vector = [0, 0, 0]
         for tendon in self.tendons:
-            force_vector = vector_add(tendon.spring_force_vector(self), force_vector)
+            force_vector = vector_add(tendon.force_vector(self), force_vector)
         return force_vector
 
     # @property
@@ -349,15 +360,15 @@ class Member:
     def unit_force_vector(self, vertex):
         if ((vertex is self.vertices[0] and isinstance(self, Strut)) or
                 (vertex is self.vertices[1] and isinstance(self, Tendon))):
-            unit_vector = normalize_vector(self.vertices[0] - self.vertices[1])
+            unit_vector = normalize(self.vertices[0] - self.vertices[1])
         elif ((vertex is self.vertices[1] and isinstance(self, Strut)) or
                 (vertex is self.vertices[0] and isinstance(self, Tendon))):
-            unit_vector = normalize_vector(self.vertices[1] - self.vertices[0])
+            unit_vector = normalize(self.vertices[1] - self.vertices[0])
         else:
             raise Exception('Expected vertex to belong to member')
         return unit_vector
 
-    def spring_force_vector(self, vertex):
+    def force_vector(self, vertex):
         # debug
         # ufv = self.unit_force_vector(vertex)
         # sfm = self.spring_force_magnitude
@@ -373,28 +384,28 @@ class Strut(Member):
 
     def translate(self, step):
         """ sum vertex sprint vectors and translate strut by step in said vector direction"""
-        displacement = vector_scalar_multiply(normalize_vector(self.spring_force_vector_sum), step)
+        displacement = vector_scalar_multiply(normalize(self.spring_force_vector_sum), step)
         self.vertices[0].set_coordinates(vector_add(self.vertices[0].coordinates, displacement))
         self.vertices[1].set_coordinates(vector_add(self.vertices[1].coordinates, displacement))
 
     @property
     def spring_force_vector_sum(self):
         """ returns spring force if not an anchor, else zero vector"""
-        return vector_add(self.vertices[0].spring_force_vector, self.vertices[1].spring_force_vector)
+        return vector_add(self.vertices[0].force_vector, self.vertices[1].force_vector)
 
     @property
     def spring_force_magnitude(self):
         return sum([e ** 2 for e in self.spring_force_vector_sum]) ** 0.5
 
-    def vector(self, vertex):
-        """ return a free vector parallel to the strut that terminates at the vertex arg"""
+    def axis_vector(self, terminal_vertex):
+        """ return a free vector parallel to the strut that terminates at the terminal_vertex arg"""
         # todo: move this func from strut to member
-        if self.vertices[0] is vertex:
+        if self.vertices[0] is terminal_vertex:
             return self.vertices[0] - self.vertices[1]
-        elif self.vertices[1] is vertex:
+        elif self.vertices[1] is terminal_vertex:
             return self.vertices[1] - self.vertices[0]
         else:
-            raise Exception('strut does not contain vertex')
+            raise Exception('strut does not contain terminal_vertex')
 
 
 class Tendon(Member):
@@ -493,10 +504,14 @@ class Tensegrity:
         # return True not in [strut.spring_force_magnitude > err_tol for strut in self.struts]
         return False not in [strut.spring_force_magnitude < err_tol for strut in self.struts]
 
-    def print_spring_forces(self, err_tol, vertices=True, members=True, unit_vectors=False):
+    def print_spring_forces(self, err_tol, vertices=True, members=True, unit_vectors=False, verbose=True):
         type_width = len('vertex')
         coord_width = 20
         round_param = 3
+        if not verbose:
+            vertices = False
+            members = False
+            unit_vectors = False
         if self.equilibrium(err_tol=err_tol):
             print('*** This tensegrity is in equilibrium ***')
         else:
@@ -507,7 +522,7 @@ class Tensegrity:
             for vertex in self.vertices:
                 print('Vertex',
                       f'{str(around(array(vertex.coordinates), round_param)): <{coord_width}}',
-                      f'{str(around(array(vertex.spring_force_vector), round_param)): <{coord_width}}')
+                      f'{str(around(array(vertex.force_vector), round_param)): <{coord_width}}')
         if members:
             print('*      V0 Coordinates       V1 Coordinates       Force      Unit Vector 0        Unit Vector 1'
                   '   current length')
@@ -539,62 +554,115 @@ class Tensegrity:
                       )
 
     def solver_spring_forces(self, err_tol=0.01, initial_step=0.005, max_step_count=1000, verbose=False):
-        """ If the dot product of the vertex forces is above a threshold (e.g. 0) then the forces are mostly
-        translational and we will translate the strut.
-        If the dot product of the vertex forces is below a threshold (e.g. 0) then the forces are mostly
-        rotational and we will rotate the strut"""
+        """ some cases require a translation and others a rotation. All forces described here are, or result from,
+        Tendon spring forces. Vertex forces are lateral if the angle between the vertex force and the strut
+        is between pi/4 and 3pi/4. Vertex forces that lie between 0 and pi/4 or 3pi/4 and pi are longitudinal.
+        If an operation results in a new vertex force that is in the opposite direction as the old vertex force
+        (old dot new < 0) then an overshoot is diagnosed and the step size for that vertex is reduced"""
         step_count = 0
         translate_threshold = 0
-        # step = initial_step
-        for strut in self.struts:
-            strut.step = initial_step
+        # todo: add a set_step function to Vertex
+        for vertex in self.vertices:
+            vertex.step = initial_step
+
         while not self.equilibrium(err_tol=err_tol) and step_count < max_step_count:
             for strut in self.struts:
-                strut.previous_force_vector_sum = strut.spring_force_vector_sum
-                # dot product less than threshold, or strut anchored, so rotate
-                if (dot_product(strut.vertices[0].spring_force_vector, strut.vertices[1].spring_force_vector) <
-                        translate_threshold or strut.anchor):
-                    angle = math.asin(strut.step / strut.current_length)
-                    if (vector_mag(strut.vertices[0].spring_force_vector) >
-                            vector_mag(strut.vertices[1].spring_force_vector)) or strut.vertices[1].anchor:
-                        rotation_vertex = strut.vertices[0]
-                        center_vertex = strut.vertices[1]
-                    else:
-                        rotation_vertex = strut.vertices[1]
-                        center_vertex = strut.vertices[0]
-                    strut_vector = strut.vector(vertex=rotation_vertex)
-                    axis = normalize_vector(cross_product(strut_vector, rotation_vertex.spring_force_vector))
+                # Both vertex forces lateral and more parallel than orthogonal:
+                # Translate strut along sum of vertex forces
+                if (strut.vertices[0].lateral_f and strut.vertices[1].lateral_f and
+                        abs(dot_product(normalize(strut.vertices[0].force_vector),
+                                        normalize(strut.vertices[1].force_vector))) >= math.cos(math.pi / 4)):
+                    strut.translate(min([vertex.step for vertex in strut.vertices]))
                     if verbose:
-                        print('>> solver rotation: center vtx:', center_vertex.coordinates, 'axis:', axis,
-                              'angle', angle)
-                    strut.rotate(center_vertex, axis, angle)
+                        print('Both vertex forces lateral and more parallel than orthogonal: Translating')
+                # Both vertex forces lateral and more orthogonal than parallel:
+                # Rotate vertex with largest force about the vertex with smallest force
+                elif (strut.vertices[0].lateral_f and strut.vertices[1].lateral_f and
+                      abs(dot_product(normalize(strut.vertices[0].force_vector),
+                                      normalize(strut.vertices[1].force_vector))) < math.cos(math.pi / 4)):
+                    # vertex 0 has largest force
+                    if vector_mag(strut.vertices[0].force_vector) >= vector_mag(strut.vertices[1].force_vector):
+                        c_vertex = strut.vertices[1]
+                        r_vertex = strut.vertices[0]
+                        angle = math.asin(r_vertex.step / strut.current_length)
+                        r_vertex.rotate(center=c_vertex,
+                                        axis=cross_product(normalize(r_vertex.force_vector),
+                                                           strut.axis_vector(c_vertex)),
+                                        angle=math.asin(r_vertex.step / strut.current_length))
+                    # vertex 1 has largest force
+                    elif vector_mag(strut.vertices[1].force_vector) > vector_mag(strut.vertices[0].force_vector):
+                        c_vertex = strut.vertices[0]
+                        r_vertex = strut.vertices[1]
+                        r_vertex.rotate(center=c_vertex,
+                                        axis=cross_product(normalize(r_vertex.force_vector),
+                                                           strut.axis_vector(c_vertex)),
+                                        angle=math.asin(r_vertex.step / strut.current_length))
+                    if verbose:
+                        print('Both vertex forces lateral and more orthogonal than parallel: Rotating')
+                # One vertex force is lateral and one is longitudinal and the lateral force is largest:
+                # Rotate vertex with the largest force about the vertex with the smallest force
+                # vertex 0 is lateral and largest
+                elif (strut.vertices[0].lateral_f and strut.vertices[1].longitudinal_f and
+                      vector_mag(strut.vertices[0].force_vector) > vector_mag(strut.vertices[1].force_vector)):
+                    c_vertex = strut.vertices[1]
+                    r_vertex = strut.vertices[0]
+                    r_vertex.rotate(center=c_vertex,
+                                    axis=cross_product(normalize(r_vertex.force_vector),
+                                                       strut.axis_vector(c_vertex)),
+                                    angle=math.asin(r_vertex.step / strut.current_length))
+                    if verbose:
+                        print('One vertex force is lateral and one is longitudinal and the lateral force',
+                              'is largest: Rotating vertex 0')
+                    # vertex 1 is lateral and largest
+                elif (strut.vertices[1].lateral_f and strut.vertices[0].longitudinal_f and
+                      vector_mag(strut.vertices[1].force_vector) > vector_mag(strut.vertices[0].force_vector)):
+                    c_vertex = strut.vertices[0]
+                    r_vertex = strut.vertices[1]
+                    r_vertex.rotate(center=c_vertex,
+                                    axis=cross_product(normalize(r_vertex.force_vector),
+                                                       strut.axis_vector(c_vertex)),
+                                    angle=math.asin(r_vertex.step / strut.current_length))
+                    if verbose:
+                        print('One vertex force is lateral and one is longitudinal and the lateral force ',
+                              'is largest: Rotating vertex 1')
+                # One vertex force is lateral and one is longitudinal and the longitudinal force is largest:
+                # Translate along the largest force
+                # vertex 0 is longitudinal and largest
+                elif (strut.vertices[0].longitudinal_f and strut.vertices[1].lateral_f and
+                      vector_mag(strut.vertices[0].force_vector) > vector_mag(strut.vertices[1].force_vector)):
+                    strut.translate(strut.vertices[0].step)
+                    if verbose:
+                        print(
+                            'One vertex force is lateral and one is longitudinal and the ',
+                            'longitudinal force is largest: Translating along vertex 0 force')
+                # vertex 1 is longitudinal and largest
+                elif (strut.vertices[1].longitudinal_f and strut.vertices[0].lateral_f and
+                      vector_mag(strut.vertices[1].force_vector) > vector_mag(strut.vertices[0].force_vector)):
+                    strut.translate(strut.vertices[1].step)
+                    if verbose:
+                        print(
+                            'One vertex force is lateral and one is longitudinal and the longitudinal force is largest',
+                            ' Translating along vertex 0 force')
+                # Both forces are longitudinal: Translate along sum of the vertex forces
+                elif strut.vertices[0].longitudinal_f and strut.vertices[1].longitudinal_f:
+                    strut.translate(min([vertex.step for vertex in strut.vertices]))
+                    if verbose:
+                        print('Both forces are longitudinal: Translating along sum of forces')
                 else:
-                    # dot product greater than threshold, so translate
-                    if verbose:
-                        print('>> solver translation', strut.step)
-                    strut.translate(strut.step)
-                if dot_product(strut.previous_force_vector_sum, strut.spring_force_vector_sum) < 0:
-                    strut.step = strut.step/2
-                    print('*** detected an overshoot ***')
-            if verbose:
-                print('step count:', step_count)
+                    raise Exception('No operation found, solver cannot continue')
             step_count += 1
-            #debug
-            if step_count == 14:
-                print('*****step count 14')
-            if verbose:
-                print('strut[0] force mag', self.struts[0].spring_force_magnitude,
-                      'strut[1] force mag', self.struts[1].spring_force_magnitude)
-                print('>> solver strut[0]',
-                      self.struts[0].vertices[0].coordinates,
-                      self.struts[0].vertices[1].coordinates,
-                      'spring force sum', self.struts[0].spring_force_vector_sum
-                      'strut[1]',
-                      self.struts[1].vertices[0].coordinates,
-                      self.struts[1].vertices[1].coordinates)
         if verbose:
             print('>> solver used ', step_count, ' steps')
 # end class Tensegrity
+
+
+class TArbitrary(Tensegrity):
+    """ used for testing. Allows calling function to fully describe Tensegrity """
+    def __init__(self, coordinates, strut_vertices, tendon_vertices, nom_tendon_lengths):
+        self.strut_vertices = strut_vertices
+        self.tendon_vertices = tendon_vertices
+        Tensegrity.__init__(self, coordinates, self.strut_vertices, self.tendon_vertices)
+        self.set_nom_tendon_lengths(nom_tendon_lengths)
 
 
 class Kite(Tensegrity):
@@ -605,25 +673,6 @@ class Kite(Tensegrity):
         self.tendon_vertices = [[0, 1], [1, 2], [2, 3], [3, 0]]
         Tensegrity.__init__(self, coordinates, self.strut_vertices, self.tendon_vertices)
         self.set_nom_tendon_lengths(0.5)
-
-    def solver_strut_0x(self):
-        """ Moves struts[0] along x axis until kite is in equilibrium. Assumes the required symmetries exist """
-        initial_step = 0.01
-        max_step_count = 100
-        step_count = 0
-        while not self.equilibrium(err_tol=0.1):
-            if step_count > max_step_count:
-                print('**** max_step_count reached ****')
-                break
-            error_signal = dot_product([1, 0, 0], self.struts[0].spring_force_vector_sum)
-            if error_signal < 0:
-                step = -initial_step
-            else:
-                step = initial_step
-            for vertex in self.struts[0].vertices:
-                vertex.coordinates = vector_add([step, 0, 0], vertex.coordinates)
-            # print('solver: spring_force_vector_sum',  self.struts[0].spring_force_vector_sum)
-            step_count += 1
 
 
 class PinnedKite(Tensegrity):

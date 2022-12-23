@@ -46,7 +46,7 @@ def solve_tensegrity_tensions(compression_members, tension_members, vertices, ve
 
 
 # Returns a matrix that takes in a vector of the scalar tensions / compressions in each member, and outputs the net
-# force for each vertex. For a valid tensegrity structure the vector of tensions / compressions should be >= 0
+# force for each terminal_vertex. For a valid tensegrity structure the vector of tensions / compressions should be >= 0
 # elementwise
 def build_tensegrity_matrix(compression_members, tension_members, vertices):
     compression_block = build_tensegrity_matrix_block(compression_members, vertices, 1)

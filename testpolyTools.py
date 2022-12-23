@@ -47,9 +47,9 @@ class test_plane_projection(unittest.TestCase):
 #         # drawn_length = ph.tendons[0].drawn_length
 #         main = ph.tendons[0].main
 #         for tendon in ph.tendons:
-#             for vertex, end_point_vector in zip(tendon.vertices, tendon.end_point_vectors):
-#                 self.assertTrue(vertex in vertex.strut.vertices)
-#                 self.assertTrue(vertex is end_point_vector.points[0])
+#             for terminal_vertex, end_point_vector in zip(tendon.vertices, tendon.end_point_vectors):
+#                 self.assertTrue(terminal_vertex in terminal_vertex.strut.vertices)
+#                 self.assertTrue(terminal_vertex is end_point_vector.points[0])
 #
 #
 # class TestVertex(unittest.TestCase):
