@@ -11,18 +11,18 @@ def calculate_t3_prism_tensions(alpha):
                       [math.cos(alpha + 2 * math.pi / 3), math.sin(alpha + 2 * math.pi / 3), 1],
                       [math.cos(alpha + 4 * math.pi / 3), math.sin(alpha + 4 * math.pi / 3), 1]])
     #these numbers are indicies in the vertices array for the vertices on either end of the member
-    compression_members = array([[0,3],
-                                 [1,4],
-                                 [2,5]])
-    tension_members = array([[0,1],
-                              [1,2],
-                              [2,0],
-                              [3,4],
-                              [4,5],
-                              [5,3],
-                              [1,3],
-                              [2,4],
-                              [0,5]])
+    compression_members = array([[0, 3],
+                                 [1, 4],
+                                 [2, 5]])
+    tension_members = array([[0, 1],
+                             [1, 2],
+                             [2, 0],
+                             [3, 4],
+                             [4, 5],
+                             [5, 3],
+                             [1, 3],
+                             [2, 4],
+                             [0, 5]])
     return solve_tensegrity_tensions(compression_members, tension_members, vertices)
 
 
@@ -84,7 +84,7 @@ def get_unit_force_vector(member, vertices):
     # matrix*x = 0 , and
     # x >= 0 elementwise, and
     # x's elements are reasonably size (~1).
-def find_positive_solutions(matrix):
+def find_positive_solutions(matrix, verbosity=1):
     # TODO: This method is pretty gross and uses
     #  some heavy machinery that doesn't seem necessary...
     state = xalglib.minlpcreate(shape(matrix)[1])
@@ -97,21 +97,25 @@ def find_positive_solutions(matrix):
     xalglib.minlpsetlc2dense(state, matrix.tolist(), range_zeros, range_zeros)  # here is where we can set error limits
     xalglib.minlpoptimize(state)
     x, rep = xalglib.minlpresults(state)
-    print('alglib termination type: ', rep.terminationtype)
+    if verbosity > 0:
+        print('alglib termination type: ', rep.terminationtype)
     if rep.terminationtype > 0:
         return x
     else:
         #TODO: Probably is a more elegent way to handle this case...
         # raise warnings("No solution found for tensegrity structure")
-        print("*** No solution found for tensegrity structure ***")
+        if verbosity > 0:
+            print("*** No solution found for tensegrity structure ***")
 
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     print('kite tensions')
     print(calculate_kite_tensions())
-    print('valid t3 prism tensions')
+    print('Olof\'s valid t3 prism tensions')
     print(calculate_t3_prism_tensions(5*math.pi/6))
+    print('Guy\'s valid t3 prism tensions')
+    print(calculate_t3_prism_tensions(math.pi/6))
     print('invalid t3 prism tensions')
     print(calculate_t3_prism_tensions(0))
 # main.py

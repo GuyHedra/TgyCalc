@@ -1,0 +1,54 @@
+import unittest
+import TgyTools as TT
+import math
+
+
+class SimpleTools(unittest.TestCase):
+    # def test_free_vector(self):
+    #     f_vector = TT.Vertex([1, 0, 0])
+    #     self.assertEqual(f_vector.magnitude, 1)
+    #     r_vector = f_vector.rotate(axis=[0, 0, 1], angle=math.pi/4)
+    #     self.assertAlmostEqual(r_vector[0], 2 ** 0.5 / 2)
+
+    def test_vertex(self):
+        v1 = TT.Vertex([1, 0, 0])
+        r1, theta1, z1 = v1.cyl_coordinates
+        self.assertEqual(r1, 1)
+        self.assertEqual(theta1, 0)
+        self.assertEqual(z1, 0)
+        center = TT.Vertex([0, 0, 0])
+        v1.rotate(center=center, axis=[0, 0, 1], angle=math.pi/4)
+        # print('v1.coordinates', v1.coordinates)
+        self.assertAlmostEqual(v1.coordinates[0], 2 ** 0.5 / 2)
+        self.assertAlmostEqual(v1.coordinates[1], 2 ** 0.5 / 2)
+        self.assertEqual(v1.coordinates[2], 0)
+        r1_r, theta1_r, z1_r = v1.cyl_coordinates
+        self.assertEqual(r1_r, 1)
+        self.assertAlmostEqual(theta1_r, math.pi/4)
+        self.assertEqual(z1_r, 0)
+        v2 = TT.Vertex([1, 0, 0])
+        center = TT.Vertex([2, 0, 0])
+        v2.rotate(center=center, axis=[0, 0, 1], angle=math.pi/4)
+        # print('v2.coordinates', v2.coordinates)
+        self.assertAlmostEqual(v2.coordinates[0], 2 - 2 ** 0.5 / 2)
+        self.assertAlmostEqual(v2.coordinates[1], -2 ** 0.5 / 2)
+        self.assertEqual(v2.coordinates[2], 0)
+        v3 = TT.Vertex([-1, 1, 1])
+        r3, theta3, z3 = v3.cyl_coordinates
+        self.assertAlmostEqual(r3, 2 ** 0.5)
+        self.assertAlmostEqual(theta3, 3 * math.pi / 4)
+        self.assertEqual(z3, 1)
+        v4 = TT.Vertex([-1, -1, -1])
+        r4, theta4, z4 = v4.cyl_coordinates
+        self.assertAlmostEqual(r4, 2 ** 0.5)
+        self.assertAlmostEqual(theta4, -3 * math.pi / 4)
+        self.assertEqual(z4, -1)
+        v5 = TT.Vertex([1, -1, -2])
+        r5, theta5, z5 = v5.cyl_coordinates
+        self.assertAlmostEqual(r5, 2 ** 0.5)
+        self.assertAlmostEqual(theta5, -math.pi / 4)
+        self.assertEqual(z5, -2)
+
+
+if __name__ == '__main__':
+    unittest.main()
