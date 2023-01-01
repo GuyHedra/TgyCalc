@@ -1,6 +1,8 @@
 import math
 import olof_1 as o1
-from numpy import array, around, set_printoptions
+# from numpy import np.array, around, set_printoptions, matmul
+import numpy as np
+import matplotlib.pyplot as plt
 import numbers
 from scipy.spatial.transform import Rotation as R
 
@@ -44,11 +46,16 @@ def normalize(vector):
         return vector
 
 
+def vector_projection(projected_vector, unit_vector):
+    """ return the projection of projected_vector onto unit_vector"""
+    cos_alpha = dot_product(projected_vector, unit_vector) / (vector_mag(projected_vector) * vector_mag(unit_vector))
+    return vector_scalar_multiply(normalize(unit_vector), cos_alpha * vector_mag(projected_vector))
+
+
 def cartesian_coordinates(cyl_coords):
     """ cylindrical are [rho(r), phi(azimuth), z]"""
     rho, phi, z = cyl_coords
     return [rho * math.cos(phi), rho * math.sin(phi), z]
-
 
 class Vertex:
     def __init__(self, cartesian=None, cylindrical=None, step=0.1):
@@ -82,7 +89,7 @@ class Vertex:
         Translates self such that center is at the origin, rotates self by angle radians about axis and then
         translates self such that center is back at its original location"""
         point = self - center
-        r = R.from_rotvec(angle * array(axis))
+        r = R.from_rotvec(angle * np.array(axis))
         self.coordinates = r.apply(point) + center.coordinates
 
     @property
@@ -163,15 +170,15 @@ class Member:
         for vertex in self.vertices:
             vertex.rotate(center=center_vertex.coordinates, axis=axis, angle=angle)
 
-    def axis_vector(self, terminal_vertex):
+    def axis_vector(self, initial_vertex):
         """ return a free vector parallel to the strut that terminates at the terminal_vertex arg"""
         # todo: move this func from strut to member
-        if self.vertices[0] is terminal_vertex:
-            return self.vertices[0] - self.vertices[1]
-        elif self.vertices[1] is terminal_vertex:
-            return self.vertices[1] - self.vertices[0]
+        if self.vertices[1] is initial_vertex:
+            return normalize(self.vertices[0] - self.vertices[1])
+        elif self.vertices[0] is initial_vertex:
+            return normalize(self.vertices[1] - self.vertices[0])
         else:
-            raise Exception('strut does not contain terminal_vertex')
+            raise Exception('strut does not contain initial_vertex')
 
 
 class Strut(Member):
@@ -211,6 +218,22 @@ class Tendon(Member):
 
     def set_nom_length(self, nom_length):
         self.nom_length = nom_length
+
+    def set_force(self, force):
+        self.nom_length = self.current_length - force / self.spring_constant
+
+    def spring_f_vec(self, initial_vertex):
+        """ returns the spring force vector that points away from initial_vertex"""
+        return vector_scalar_multiply(self.axis_vector(initial_vertex=initial_vertex), self.spring_f_mag)
+
+    def lateral_f_vec(self, vertex):
+        """ return the lateral force that this tendon exerts on vertex. lateral force is the force perpendicular to
+        the strut. The method is to find the projection of spring_f_vec onto strut_axis, strut_axis_f_vec, and then
+        subtract strut_axis_f_vec from spring_f_vec to find lateral_f_vec"""
+        strut_axis = vertex.strut.axis_vector(initial_vertex=vertex)
+        strut_axis_f_vec = vector_projection(self.spring_f_vec(vertex), strut_axis)
+        result = np.subtract(np.array(self.spring_f_vec(vertex)), np.array(strut_axis_f_vec))
+        return np.subtract(np.array(self.spring_f_vec(vertex)), np.array(strut_axis_f_vec))
 
     @property
     def stretch_len(self):
@@ -279,7 +302,7 @@ class Tensegrity:
 
     @property
     def vertex_array(self):
-        return array([vertex.coordinates for vertex in self.vertices])
+        return np.array([vertex.coordinates for vertex in self.vertices])
 
     @property
     def strut_array(self):
@@ -306,7 +329,7 @@ class Tensegrity:
         force_vector_list = []
         i_xalglib = 0
         for vertex in self.vertices:
-            force_vector = array([0, 0, 0])
+            force_vector = np.array([0, 0, 0])
             for member in vertex.members:
                 force_vector = vector_add(force_vector, member.xalglib_force_vector(vertex))
             i_xalglib += 1
@@ -328,7 +351,7 @@ class Tensegrity:
         print('xalglib_member_forces', self.xalglib_member_forces(verbosity=2))
 
     def print_cylindrical(self, err_tol=0.01, vertices=True, tendons=True, struts=True, verbosity=2):
-        set_printoptions(formatter={'float': '{: 10.3f}'.format})
+        np.set_printoptions(formatter={'float': '{: 10.3f}'.format})
         type_width = len('vertex')
         coord_width = 10  # make this equal to the width specifier in set_printoptions call above
         array_3_width = 3 * coord_width + 4  # + 4 to account for two space and two brackets
@@ -358,8 +381,8 @@ class Tensegrity:
                       f'{"z   ": >{coord_width}}')
                 for vertex in self.vertices:
                     print(f'{label_vertex: <{label_width}}',
-                          f'{str(array(vertex.cyl_coordinates_deg)): <{array_3_width}}',
-                          f'{str(around(array(vertex.f_vector), precision)): <{array_3_width}}')
+                          f'{str(np.array(vertex.cyl_coordinates_deg)): <{array_3_width}}',
+                          f'{str(np.around(np.array(vertex.f_vector), precision)): <{array_3_width}}')
             if tendons:
                 print(f'{"Element": <{label_width}}',
                       f'{heading_v0: <{array_3_width}}',
@@ -377,8 +400,8 @@ class Tensegrity:
                     vertex0 = tendon.vertices[0]
                     vertex1 = tendon.vertices[1]
                     print(f'{"Tendon": <{label_width}}',
-                          f'{str(array(vertex0.cyl_coordinates_deg)): <{array_3_width}}',
-                          f'{str(array(vertex1.cyl_coordinates_deg)): <{array_3_width}}',
+                          f'{str(np.array(vertex0.cyl_coordinates_deg)): <{array_3_width}}',
+                          f'{str(np.array(vertex1.cyl_coordinates_deg)): <{array_3_width}}',
                           f'{str(round(tendon.spring_f_mag, precision)): <{number_width}}'
                           )
             if struts:
@@ -400,10 +423,10 @@ class Tensegrity:
                     vertex0_cyl = strut.vertices[0].cyl_coordinates_deg
                     vertex1_cyl = strut.vertices[1].cyl_coordinates_deg
                     print(f'{"Strut": <{label_width}}',
-                          f'{str(array(vertex0_cyl)): <{array_3_width}}',
-                          f'{str(array(vertex1_cyl)): <{array_3_width}}',
+                          f'{str(np.array(vertex0_cyl)): <{array_3_width}}',
+                          f'{str(np.array(vertex1_cyl)): <{array_3_width}}',
                           f'{str(round(vertex0_cyl[1] - vertex1_cyl[1], precision)): <{number_width}}',
-                          f'{str(array(strut.spring_f_vec)): <{array_3_width}}')
+                          f'{str(np.array(strut.spring_f_vec)): <{array_3_width}}')
 
     def print_spring_forces(self, err_tol, vertices=True, members=True, unit_vectors=False, verbosity=2):
         """ verbosity=0 produces no output,
@@ -413,7 +436,7 @@ class Tensegrity:
         vector_width = 30
         number_width = 11
         precision = 3
-        set_printoptions(formatter={'float': '{: 8.3f}'.format})
+        np.set_printoptions(formatter={'float': '{: 8.3f}'.format})
         label_vertex = 'Vertex'
         label_tendon = 'Tendon'
         label_strut = 'Strut'
@@ -439,8 +462,8 @@ class Tensegrity:
                       f'{heading_force: <{vector_width}}')
                 for vertex in self.vertices:
                     print(f'{label_vertex: <{label_width}}',
-                          f'{str(around(array(vertex.coordinates), precision)): <{vector_width}}',
-                          f'{str(around(array(vertex.f_vector), precision)): <{vector_width}}')
+                          f'{str(np.around(np.array(vertex.coordinates), precision)): <{vector_width}}',
+                          f'{str(np.around(np.array(vertex.f_vector), precision)): <{vector_width}}')
             if members:
                 print(f'{"Element": <{label_width}}',
                       f'{heading_v0: <{vector_width}}',
@@ -450,8 +473,8 @@ class Tensegrity:
                       )
                 for tendon in self.tendons:
                     print(f'{tendon.member_type: <{label_width}}',
-                          f'{str(around(array(tendon.vertices[0].coordinates), precision)): <{vector_width}}',
-                          f'{str(around(array(tendon.vertices[1].coordinates), precision)): <{vector_width}}',
+                          f'{str(np.around(np.array(tendon.vertices[0].coordinates), precision)): <{vector_width}}',
+                          f'{str(np.around(np.array(tendon.vertices[1].coordinates), precision)): <{vector_width}}',
                           f'{str(round(tendon.spring_f_mag, precision)): <{number_width}}',
                           f'{str(round(tendon.stretch_len, precision)): <{number_width}}'
                           )
@@ -463,19 +486,19 @@ class Tensegrity:
                       )
                 for strut in self.struts:
                     print(f'{strut.member_type: <{label_width}}',
-                          f'{str(around(array(strut.vertices[0].coordinates), precision)): <{vector_width}}',
-                          f'{str(around(array(strut.vertices[1].coordinates), precision)): <{vector_width}}',
-                          f'{str(around(array(strut.spring_f_vec), precision)): <{vector_width}}',
+                          f'{str(np.around(np.array(strut.vertices[0].coordinates), precision)): <{vector_width}}',
+                          f'{str(np.around(np.array(strut.vertices[1].coordinates), precision)): <{vector_width}}',
+                          f'{str(np.around(np.array(strut.spring_f_vec), precision)): <{vector_width}}',
                           f'{str(round(strut.current_length, precision)): <{number_width}}'
                           )
             if unit_vectors:
                 print('* Member unit vectors from simpleTools')
                 for member in self.members:
                     print(f'{member.member_type: <{type_width}}',
-                          f'{str(around(array(member.vertices[0].coordinates), precision)): <{vector_width}}',
-                          f'{str(around(array(member.vertices[1].coordinates), precision)): <{vector_width}}',
-                          # f'{str(around(array(member.unit_force_vector(member.vertices[0])), round_param)): <{vector_width}}',
-                          # f'{str(around(array(member.unit_force_vector(member.vertices[0])), round_param)): <{vector_width}}'
+                          f'{str(np.around(np.array(member.vertices[0].coordinates), precision)): <{vector_width}}',
+                          f'{str(np.around(np.array(member.vertices[1].coordinates), precision)): <{vector_width}}',
+                          # f'{str(np.around(np.array(member.unit_force_vector(member.vertices[0])), round_param)): <{vector_width}}',
+                          # f'{str(np.around(np.array(member.unit_force_vector(member.vertices[0])), round_param)): <{vector_width}}'
                           )
 
     def solver(self, err_tol=0.01, initial_step=0.005, max_step_count=1000, verbose=False):
@@ -511,7 +534,7 @@ class Tensegrity:
                         angle = math.asin(r_vertex.step / strut.current_length)
                         r_vertex.rotate(center=c_vertex,
                                         axis=cross_product(normalize(r_vertex.f_vector),
-                                                           strut.axis_vector(c_vertex)),
+                                                           strut.axis_vector(r_vertex)),
                                         angle=math.asin(r_vertex.step / strut.current_length))
                     # vertex 1 has largest force
                     elif vector_mag(strut.vertices[1].f_vector) > vector_mag(strut.vertices[0].f_vector):
@@ -519,7 +542,7 @@ class Tensegrity:
                         r_vertex = strut.vertices[1]
                         r_vertex.rotate(center=c_vertex,
                                         axis=cross_product(normalize(r_vertex.f_vector),
-                                                           strut.axis_vector(c_vertex)),
+                                                           strut.axis_vector(r_vertex)),
                                         angle=math.asin(r_vertex.step / strut.current_length))
                     if verbose:
                         print('Both vertex forces lateral and more orthogonal than parallel: Rotating')
@@ -532,7 +555,7 @@ class Tensegrity:
                     r_vertex = strut.vertices[0]
                     r_vertex.rotate(center=c_vertex,
                                     axis=cross_product(normalize(r_vertex.f_vector),
-                                                       strut.axis_vector(c_vertex)),
+                                                       strut.axis_vector(r_vertex)),
                                     angle=math.asin(r_vertex.step / strut.current_length))
                     if verbose:
                         print('One vertex force is lateral and one is longitudinal and the lateral force',
@@ -544,7 +567,7 @@ class Tensegrity:
                     r_vertex = strut.vertices[1]
                     r_vertex.rotate(center=c_vertex,
                                     axis=cross_product(normalize(r_vertex.f_vector),
-                                                       strut.axis_vector(c_vertex)),
+                                                       strut.axis_vector(r_vertex)),
                                     angle=math.asin(r_vertex.step / strut.current_length))
                     if verbose:
                         print('One vertex force is lateral and one is longitudinal and the lateral force ',
@@ -578,7 +601,33 @@ class Tensegrity:
         if verbose:
             print('>> solver used ', step_count, ' steps')
 
+    def plot(self, struts=True, tendons=True, lateral=False):
+        """ plots tendons and struts using matplotlib """
+        # fig = plt.figure()
+        ax = plt.axes(projection='3d')
+        ax.set_xlim(-5, 5)
+        ax.set_ylim(-5, 5)
+        ax.set_zlim(0, 10)
+        if struts:
+            for strut in self.struts:
+                x = [vertex.coordinates[0] for vertex in strut.vertices]
+                y = [vertex.coordinates[1] for vertex in strut.vertices]
+                z = [vertex.coordinates[2] for vertex in strut.vertices]
+                ax.plot3D(x, y, z, 'red', linewidth=3)
+        if tendons:
+            for tendon in self.tendons:
+                x = [vertex.coordinates[0] for vertex in tendon.vertices]
+                y = [vertex.coordinates[1] for vertex in tendon.vertices]
+                z = [vertex.coordinates[2] for vertex in tendon.vertices]
+                ax.plot3D(x, y, z, 'grey', linewidth=1)
+        if lateral:
+            for tendon in self.tendons:
+                for vertex in tendon.vertices:
+                    ax.quiver(*(vertex.coordinates + list(tendon.lateral_f_vec(vertex))))
+                              # tendon.lateral_f_vec(vertex), angles='xy', scale_units='xy', scale=1, color='b')
 
+
+        plt.show()
 # end class Tensegrity
 
 
@@ -625,10 +674,10 @@ class Prism(Tensegrity):
     def __init__(self, n):
         self.n = n  # strut count
         self.strut_len = 10
-        self.bot_radius = 5
-        self.top_radius = 5
+        self.bot_radius = 6
+        self.top_radius = 6
         # the top waist polygon is twisted relative to the bottom polygon
-        self.right_twist = True
+        self.right_twist = False
         if self.right_twist:
             twist_sign = 1
         else:
@@ -649,14 +698,54 @@ class Prism(Tensegrity):
             self.top_coordinates.append(cartesian_coordinates([self.top_radius, theta + twist, z_top]))
             self.bot_t_vertices.append([i, (i + 1) % self.n])
             self.top_t_vertices.append([i + n, (i + 1) % self.n + self.n])
-            self.vertical_t_vertices.append([i, (i - twist_sign) % self.n + self.n])
-            self.s_vertices.append([i, i + self.n])
+            # self.vertical_t_vertices.append([i, (i - twist_sign) % self.n + self.n])
+            self.vertical_t_vertices.append([i, i + self.n])
+            self.s_vertices.append([i, (i + twist_sign) % self.n + self.n])
             theta += theta_step
         Tensegrity.__init__(self, self.bot_coordinates + self.top_coordinates, self.s_vertices,
                             self.bot_t_vertices + self.top_t_vertices + self.vertical_t_vertices)
+        self.bot_vertices = self.vertices[0:len(self.bot_coordinates)]
+        self.top_vertices = self.vertices[len(self.bot_coordinates):]
+        self.bot_tendons = self.tendons[0:len(self.bot_t_vertices)]
+        self.top_tendons = self.tendons[len(self.bot_t_vertices):len(self.top_t_vertices)]
+        self.vertical_tendons = self.tendons[len(self.bot_t_vertices) + len(self.top_t_vertices):]
 
-    def balance_forces(self):
-        pass
+    def balance_forces(self, verbose=0):
+        """ Assumes a known good symmetrical prism.
+        Methodology:
+        1. Assign an arbitrary force equally to bottom waist tendons
+        2. Find the vertical tendon force that will balance the waist tendons in the plane orthogonal to the strut and
+        containing the vertex
+        3. Find the top waist forces that will balance the vertical tendon forces in the top orthogonal planes
+        4. Check for equilibrium
+        """
+        # 1. Assign an arbitrary force equally to bottom waist tendons
+        bot_t_force = 1
+        for tendon in self.bot_tendons:
+            tendon.set_force(bot_t_force)
+        # 2. Find the vertical tendon force that will balance the waist tendons in the plane orthogonal to the strut and
+        # containing the vertex
+        for vertex in self.bot_vertices:
+            waist_lateral_f_vecs = []
+            for tendon in vertex.tendons:
+                if tendon in self.bot_tendons:
+                    waist_lateral_f_vecs.append(tendon.lateral_f_vec(vertex))
+            if len(waist_lateral_f_vecs) != 2:
+                raise Exception('Expected to find 2 bot_tendons for bot_vertex')
+            vertical_tendon = [tendon for tendon in vertex.tendons if tendon in self.vertical_tendons][0]
+            vertical_lateral_f_vec = \
+                vector_scalar_multiply(vector_add(waist_lateral_f_vecs[0], waist_lateral_f_vecs[1]), -1)
+            cos_alpha = (dot_product(vertical_tendon.axis_vector(vertex), vertex.strut.axis_vector(vertex)) /
+                         (vector_mag(vertical_tendon.axis_vector(vertex)) *
+                          vector_mag(vertex.strut.axis_vector(vertex))))
+            sin_alpha = (1 - cos_alpha ** 2) ** 0.5
+            vertical_f_mag = vector_mag(vertical_lateral_f_vec) / sin_alpha
+            vertical_tendon.set_force(vector_mag(vertical_lateral_f_vec) / sin_alpha)
+            if verbose > 1:
+                print('bot vertices f_vector', vertex.f_vector, 'dot with strut axis',
+                      dot_product(vertex.f_vector, vertex.strut.axis_vector(vertex)))
+        # 3. Find the top waist forces that will balance the vertical tendon forces in the top orthogonal planes
+        # 4. Check for equilibrium
 
     # def solver_strut_twister(self):
     #     """ attempts to reach equilibrium by changing position of the top of the struts. Keeps all radial symmetries"""
