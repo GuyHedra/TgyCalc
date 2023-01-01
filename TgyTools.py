@@ -37,6 +37,13 @@ def cross_product(vector0, vector1):
             vector0[2] * vector1[0] - vector0[0] * vector1[2],
             vector0[0] * vector1[1] - vector0[1] * vector1[0]]
 
+def vec_angle(vec0, vec1):
+    """ returns the acute angle between two free vectors """
+    value = math.acos(dot_product(vec0, vec1) / (vector_mag(vec0) * vector_mag(vec1)))
+    # if the angle is greater than pi / 2 then it is the obtuse angle, and we want the acute angle
+    if value > math.pi / 2:
+        value = math.pi - value
+    return value
 
 def normalize(vector):
     magnitude = sum([element ** 2 for element in vector]) ** 0.5
@@ -626,7 +633,11 @@ class Tensegrity:
                     ax.quiver(*(vertex.coordinates + list(tendon.lateral_f_vec(vertex))), color='blue')
         if vertex_f:
             for vertex in self.vertices:
-                ax.quiver(*(vertex.coordinates + list(vertex.f_vector)), color='green')
+                # scale the vectors so the plot looks better
+                scale_factor = 0.1
+                coords = [c * scale_factor for c in vertex.f_vector]
+                # ax.quiver(*(vertex.coordinates + list(vertex.f_vector)), color='green',  arrow_length_ratio=0.01)
+                ax.quiver(*(vertex.coordinates + coords), color='green')
                 # ax.quiver(*(vertex.coordinates + list(vertex.f_vector)), color='green')
 
 
@@ -702,7 +713,6 @@ class Prism(Tensegrity):
             self.top_coordinates.append(cartesian_coordinates([self.top_radius, theta + twist, z_top]))
             self.bot_t_vertices.append([i, (i + 1) % self.n])
             self.top_t_vertices.append([i + n, (i + 1) % self.n + self.n])
-            # self.vertical_t_vertices.append([i, (i - twist_sign) % self.n + self.n])
             self.vertical_t_vertices.append([i, i + self.n])
             self.s_vertices.append([i, (i + twist_sign) % self.n + self.n])
             theta += theta_step
@@ -711,7 +721,7 @@ class Prism(Tensegrity):
         self.bot_vertices = self.vertices[0:len(self.bot_coordinates)]
         self.top_vertices = self.vertices[len(self.bot_coordinates):]
         self.bot_tendons = self.tendons[0:len(self.bot_t_vertices)]
-        self.top_tendons = self.tendons[len(self.bot_t_vertices):len(self.top_t_vertices)]
+        self.top_tendons = self.tendons[len(self.bot_t_vertices):len(self.top_t_vertices) + len(self.bot_t_vertices)]
         self.vertical_tendons = self.tendons[len(self.bot_t_vertices) + len(self.top_t_vertices):]
 
     def balance_forces(self, verbose=0):
@@ -747,7 +757,21 @@ class Prism(Tensegrity):
                 print('bot vertices f_vector', vertex.f_vector, 'cross with strut axis',
                       cross_product(vertex.f_vector, vertex.strut.axis_vector(vertex)))
         # 3. Find the top waist forces that will balance the vertical tendon forces in the top orthogonal planes
-
+        for vertex in self.top_vertices:
+            # waist_lateral_f_vec = vector_add(waist_lateral_f_vecs[0], waist_lateral_f_vecs[1])
+            vertical_tendon = [tendon for tendon in vertex.tendons if tendon in self.vertical_tendons][0]
+            cos_alpha = (dot_product(vertical_tendon.axis_vector(vertex), vertex.strut.axis_vector(vertex)) /
+                         (vector_mag(vertical_tendon.axis_vector(vertex)) *
+                          vector_mag(vertex.strut.axis_vector(vertex))))
+            tan_alpha = math.tan(math.acos(cos_alpha))
+            waist_lat_sum_f_mag = vertical_tendon.spring_f_mag * tan_alpha
+            tendon_axes = [tendon.axis_vector(vertex) for tendon in vertex.tendons if tendon in self.top_tendons]
+            phi = vec_angle(*[tendon.axis_vector(vertex) for tendon in vertex.tendons if tendon in self.top_tendons])
+            waist_lat_f_mag = (waist_lat_sum_f_mag / 2) * math.cos(phi / 2)
+            # waist_lat_f_mag = (waist_lat_sum_f_mag) * math.cos(phi / 2)
+            for tendon in vertex.tendons:
+                if tendon in self.top_tendons:
+                    tendon.set_force(waist_lat_f_mag)
         # 4. Check for equilibrium
 
     # def solver_strut_twister(self):
