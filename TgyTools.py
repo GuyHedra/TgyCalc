@@ -227,7 +227,7 @@ class Tendon(Member):
         return vector_scalar_multiply(self.axis_vector(initial_vertex=initial_vertex), self.spring_f_mag)
 
     def lateral_f_vec(self, vertex):
-        """ return the lateral force that this tendon exerts on vertex. lateral force is the force perpendicular to
+        """ return the lateral_f force that this tendon exerts on vertex. lateral_f force is the force perpendicular to
         the strut. The method is to find the projection of spring_f_vec onto strut_axis, strut_axis_f_vec, and then
         subtract strut_axis_f_vec from spring_f_vec to find lateral_f_vec"""
         strut_axis = vertex.strut.axis_vector(initial_vertex=vertex)
@@ -503,7 +503,7 @@ class Tensegrity:
 
     def solver(self, err_tol=0.01, initial_step=0.005, max_step_count=1000, verbose=False):
         """ some cases require a translation and others a rotation. All forces described here are, or result from,
-        Tendon spring forces. Vertex forces are lateral if the angle between the vertex force and the strut
+        Tendon spring forces. Vertex forces are lateral_f if the angle between the vertex force and the strut
         is between pi/4 and 3pi/4. Vertex forces that lie between 0 and pi/4 or 3pi/4 and pi are longitudinal.
         If an operation results in a new vertex force that is in the opposite direction as the old vertex force
         (old dot new < 0) then an overshoot is diagnosed and the step size for that vertex is reduced"""
@@ -514,15 +514,15 @@ class Tensegrity:
 
         while not self.equilibrium(err_tol=err_tol) and step_count < max_step_count:
             for strut in self.struts:
-                # Both vertex forces lateral and more parallel than orthogonal:
+                # Both vertex forces lateral_f and more parallel than orthogonal:
                 # Translate strut along sum of vertex forces
                 if (strut.vertices[0].f_is_lateral and strut.vertices[1].f_is_lateral and
                         abs(dot_product(normalize(strut.vertices[0].f_vector),
                                         normalize(strut.vertices[1].f_vector))) >= math.cos(math.pi / 4)):
                     strut.translate(min([vertex.step for vertex in strut.vertices]))
                     if verbose:
-                        print('Both vertex forces lateral and more parallel than orthogonal: Translating')
-                # Both vertex forces lateral and more orthogonal than parallel:
+                        print('Both vertex forces lateral_f and more parallel than orthogonal: Translating')
+                # Both vertex forces lateral_f and more orthogonal than parallel:
                 # Rotate vertex with largest force about the vertex with smallest force
                 elif (strut.vertices[0].f_is_lateral and strut.vertices[1].f_is_lateral and
                       abs(dot_product(normalize(strut.vertices[0].f_vector),
@@ -545,10 +545,10 @@ class Tensegrity:
                                                            strut.axis_vector(r_vertex)),
                                         angle=math.asin(r_vertex.step / strut.current_length))
                     if verbose:
-                        print('Both vertex forces lateral and more orthogonal than parallel: Rotating')
-                # One vertex force is lateral and one is longitudinal and the lateral force is largest:
+                        print('Both vertex forces lateral_f and more orthogonal than parallel: Rotating')
+                # One vertex force is lateral_f and one is longitudinal and the lateral_f force is largest:
                 # Rotate vertex with the largest force about the vertex with the smallest force
-                # vertex 0 is lateral and largest
+                # vertex 0 is lateral_f and largest
                 elif (strut.vertices[0].f_is_lateral and strut.vertices[1].f_is_longitudinal and
                       vector_mag(strut.vertices[0].f_vector) > vector_mag(strut.vertices[1].f_vector)):
                     c_vertex = strut.vertices[1]
@@ -558,9 +558,9 @@ class Tensegrity:
                                                        strut.axis_vector(r_vertex)),
                                     angle=math.asin(r_vertex.step / strut.current_length))
                     if verbose:
-                        print('One vertex force is lateral and one is longitudinal and the lateral force',
+                        print('One vertex force is lateral_f and one is longitudinal and the lateral_f force',
                               'is largest: Rotating vertex 0')
-                    # vertex 1 is lateral and largest
+                    # vertex 1 is lateral_f and largest
                 elif (strut.vertices[1].f_is_lateral and strut.vertices[0].f_is_longitudinal and
                       vector_mag(strut.vertices[1].f_vector) > vector_mag(strut.vertices[0].f_vector)):
                     c_vertex = strut.vertices[0]
@@ -570,9 +570,9 @@ class Tensegrity:
                                                        strut.axis_vector(r_vertex)),
                                     angle=math.asin(r_vertex.step / strut.current_length))
                     if verbose:
-                        print('One vertex force is lateral and one is longitudinal and the lateral force ',
+                        print('One vertex force is lateral_f and one is longitudinal and the lateral_f force ',
                               'is largest: Rotating vertex 1')
-                # One vertex force is lateral and one is longitudinal and the longitudinal force is largest:
+                # One vertex force is lateral_f and one is longitudinal and the longitudinal force is largest:
                 # Translate along the largest force
                 # vertex 0 is longitudinal and largest
                 elif (strut.vertices[0].f_is_longitudinal and strut.vertices[1].f_is_lateral and
@@ -580,7 +580,7 @@ class Tensegrity:
                     strut.translate(strut.vertices[0].step)
                     if verbose:
                         print(
-                            'One vertex force is lateral and one is longitudinal and the ',
+                            'One vertex force is lateral_f and one is longitudinal and the ',
                             'longitudinal force is largest: Translating along vertex 0 force')
                 # vertex 1 is longitudinal and largest
                 elif (strut.vertices[1].f_is_longitudinal and strut.vertices[0].f_is_lateral and
@@ -588,7 +588,7 @@ class Tensegrity:
                     strut.translate(strut.vertices[1].step)
                     if verbose:
                         print(
-                            'One vertex force is lateral and one is longitudinal and the longitudinal force is largest',
+                            'One vertex force is lateral_f and one is longitudinal and the longitudinal force is largest',
                             ' Translating along vertex 0 force')
                 # Both forces are longitudinal: Translate along sum of the vertex forces
                 elif strut.vertices[0].f_is_longitudinal and strut.vertices[1].f_is_longitudinal:
@@ -601,7 +601,7 @@ class Tensegrity:
         if verbose:
             print('>> solver used ', step_count, ' steps')
 
-    def plot(self, struts=True, tendons=True, lateral=False):
+    def plot(self, struts=True, tendons=True, lateral_f=False, vertex_f=False):
         """ plots tendons and struts using matplotlib """
         # fig = plt.figure()
         ax = plt.axes(projection='3d')
@@ -620,11 +620,15 @@ class Tensegrity:
                 y = [vertex.coordinates[1] for vertex in tendon.vertices]
                 z = [vertex.coordinates[2] for vertex in tendon.vertices]
                 ax.plot3D(x, y, z, 'grey', linewidth=1)
-        if lateral:
+        if lateral_f:
             for tendon in self.tendons:
                 for vertex in tendon.vertices:
-                    ax.quiver(*(vertex.coordinates + list(tendon.lateral_f_vec(vertex))))
-                              # tendon.lateral_f_vec(vertex), angles='xy', scale_units='xy', scale=1, color='b')
+                    ax.quiver(*(vertex.coordinates + list(tendon.lateral_f_vec(vertex))), color='blue')
+        if vertex_f:
+            for vertex in self.vertices:
+                ax.quiver(*(vertex.coordinates + list(vertex.f_vector)), color='green')
+                # ax.quiver(*(vertex.coordinates + list(vertex.f_vector)), color='green')
+
 
 
         plt.show()
@@ -677,7 +681,7 @@ class Prism(Tensegrity):
         self.bot_radius = 6
         self.top_radius = 6
         # the top waist polygon is twisted relative to the bottom polygon
-        self.right_twist = False
+        self.right_twist = True
         if self.right_twist:
             twist_sign = 1
         else:
@@ -732,19 +736,18 @@ class Prism(Tensegrity):
                     waist_lateral_f_vecs.append(tendon.lateral_f_vec(vertex))
             if len(waist_lateral_f_vecs) != 2:
                 raise Exception('Expected to find 2 bot_tendons for bot_vertex')
+            waist_lateral_f_vec = vector_add(waist_lateral_f_vecs[0], waist_lateral_f_vecs[1])
             vertical_tendon = [tendon for tendon in vertex.tendons if tendon in self.vertical_tendons][0]
-            vertical_lateral_f_vec = \
-                vector_scalar_multiply(vector_add(waist_lateral_f_vecs[0], waist_lateral_f_vecs[1]), -1)
             cos_alpha = (dot_product(vertical_tendon.axis_vector(vertex), vertex.strut.axis_vector(vertex)) /
                          (vector_mag(vertical_tendon.axis_vector(vertex)) *
                           vector_mag(vertex.strut.axis_vector(vertex))))
             sin_alpha = (1 - cos_alpha ** 2) ** 0.5
-            vertical_f_mag = vector_mag(vertical_lateral_f_vec) / sin_alpha
-            vertical_tendon.set_force(vector_mag(vertical_lateral_f_vec) / sin_alpha)
+            vertical_tendon.set_force(vector_mag(waist_lateral_f_vec) / sin_alpha)
             if verbose > 1:
-                print('bot vertices f_vector', vertex.f_vector, 'dot with strut axis',
-                      dot_product(vertex.f_vector, vertex.strut.axis_vector(vertex)))
+                print('bot vertices f_vector', vertex.f_vector, 'cross with strut axis',
+                      cross_product(vertex.f_vector, vertex.strut.axis_vector(vertex)))
         # 3. Find the top waist forces that will balance the vertical tendon forces in the top orthogonal planes
+
         # 4. Check for equilibrium
 
     # def solver_strut_twister(self):

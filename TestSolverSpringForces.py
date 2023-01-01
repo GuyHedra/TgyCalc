@@ -32,7 +32,7 @@ class Solver(unittest.TestCase):
         """ test each of the 7 operation cases that solver_spring_forces uses """
         run_cases = [1, 2, 3, 4, 5, 6]
         run_cases = [4]
-        # Both vertex forces lateral and more parallel than orthogonal:
+        # Both vertex forces lateral_f and more parallel than orthogonal:
         # Translate strut along sum of vertex forces
         # first make vertex forces completely parallel
         err_tol = 0.1
