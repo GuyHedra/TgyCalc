@@ -84,11 +84,12 @@ class Solver(unittest.TestCase):
         if 4 in run_cases:
             verbosity = 0
             verbosity = 2
+            verbosity = 1
             if verbosity > 0:
                 print('****** test case 4 Prism with n = 3 ******')
             # tensegrity = TT.Prism(n=4)
             tensegrity = TT.Prism(n=3)
-            err_tol = 1
+            err_tol = 0.1
             # if verbosity > 0:
             #     print('algblib ', o1.solve_tensegrity_tensions(array(tensegrity.strut_array),
             #                                                    array(tensegrity.tendon_array),
@@ -104,7 +105,7 @@ class Solver(unittest.TestCase):
             # tensegrity.solver(err_tol=err_tol, max_step_count=1000, initial_step=err_tol / 10, verbose=False)
             # debug
 
-            tensegrity.solver(err_tol=err_tol, max_step_count=100, initial_step=err_tol / 10, verbose=True)
+            tensegrity.solver(err_tol=err_tol, max_step_count=1000, initial_step=err_tol / 10, verbose=True)
             tensegrity.print_cylindrical(err_tol=err_tol)
             verbosity = 0
             if verbosity > 0:

@@ -64,9 +64,9 @@ def build_tensegrity_matrix_block(members, vertices, sign, verbose=False):
         for i, vertex in enumerate(vertices):
             vertex_force = zeros(shape(vertex))
             if i == member[0]:
-                vertex_force = sign * force_direction;
+                vertex_force = sign * force_direction
             if i == member[1]:
-                vertex_force = sign * -force_direction;
+                vertex_force = sign * -force_direction
             column = concatenate((column, vertex_force), axis=0)
         # TODO: These two statements are especially gross.
         column_as_column_vector = transpose(array([column]))
@@ -114,9 +114,9 @@ if __name__ == '__main__':
     print(calculate_kite_tensions())
     print('Olof\'s valid t3 prism tensions')
     print(calculate_t3_prism_tensions(5*math.pi/6))
-    print('Guy\'s valid t3 prism tensions')
-    print(calculate_t3_prism_tensions(math.pi/6))
-    print('invalid t3 prism tensions')
-    print(calculate_t3_prism_tensions(0))
+    # print('Guy\'s valid t3 prism tensions')
+    # print(calculate_t3_prism_tensions(math.pi/6))
+    # print('invalid t3 prism tensions')
+    # print(calculate_t3_prism_tensions(0))
 # main.py
 #Displaying main.py.

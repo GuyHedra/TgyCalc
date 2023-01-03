@@ -79,7 +79,7 @@ class TgyTools(unittest.TestCase):
 
     def test_tensegrity_plot(self):
         tgy = TT.Prism(n=3)
-        tgy.set_nom_tendon_lengths(0.5)
+        tgy.set_nom_tendon_lengths(0.1)
         tgy.balance_forces(verbose=2)
         tgy.plot(lateral_f=True, vertex_f=True)
 

@@ -9,6 +9,7 @@ from scipy.spatial.transform import Rotation as R
 # todo: consider using numpy arrays for all vectors and coordinates, hopefully can use their funcs instead of homegrown
 """ TgyTools.py is a simplified version of polyTools intended for use within TgyCalc"""
 
+stable_tol = 0.0001
 
 def vector_add(v0, v1):
     return [c0 + c1 for c0, c1 in zip(v0, v1)]
@@ -20,10 +21,10 @@ def vector_mag(vector):
 
 
 def vector_scalar_multiply(vector, scalar):
-    if isinstance(vector, list) and isinstance(scalar, numbers.Number):
+    # if isinstance(vector, list) and isinstance(scalar, numbers.Number):
         return [element * scalar for element in vector]
-    else:
-        raise Exception('vector must be a list and scalar must be a number')
+    # else:
+    #     raise Exception('vector must be a list and scalar must be a number')
 
 
 def dot_product(v0, v1):
@@ -31,11 +32,16 @@ def dot_product(v0, v1):
     return sum([v0_coord * v1_coord for v0_coord, v1_coord in zip(v0, v1)])
 
 
+def vec_cos(vec0, vec1):
+    return math.acos(dot_product(vec0, vec1) / (vector_mag(vec0) * vector_mag(vec1)))
+
+
 def cross_product(vector0, vector1):
     """Returns the cross product between two free vectors"""
     return [vector0[1] * vector1[2] - vector0[2] * vector1[1],
             vector0[2] * vector1[0] - vector0[0] * vector1[2],
             vector0[0] * vector1[1] - vector0[1] * vector1[0]]
+
 
 def vec_angle(vec0, vec1):
     """ returns the acute angle between two free vectors """
@@ -155,7 +161,7 @@ class Member:
 
     def __init__(self, vertices):
         self.vertices = vertices
-        self.force = None
+        # self.force = None
         self.xalglib_force = None
 
     def xalglib_force_vector(self, vertex):
@@ -201,6 +207,15 @@ class Strut(Member):
         self.vertices[0].set_coordinates(vector_add(self.vertices[0].coordinates, displacement))
         self.vertices[1].set_coordinates(vector_add(self.vertices[1].coordinates, displacement))
 
+    # def lateral_vec(self, vector, vertex):
+    #     """ returns the component of vector which is orthogonal, or lateral, to self.axis_vector """
+    #     axis_vec = self.axis_vector(vertex)
+    #     cos_alpha = (dot_product(vector, axis_vec) / (vector_mag(vector) * vector_mag(axis_vec)))
+    #     vector_long_mag = vector_mag(vector) * cos_alpha
+    #     vector_long = vector_scalar_multiply(axis_vec, vector_long_mag)
+    #     vector_lat = vector_add(vector, vector_scalar_multiply(vector_long, -1))  # todo pretty up with np.array
+    #     return vector_lat
+
     @property
     def spring_f_vec(self):
         """ returns vector sum of all spring forces """
@@ -239,7 +254,6 @@ class Tendon(Member):
         subtract strut_axis_f_vec from spring_f_vec to find lateral_f_vec"""
         strut_axis = vertex.strut.axis_vector(initial_vertex=vertex)
         strut_axis_f_vec = vector_projection(self.spring_f_vec(vertex), strut_axis)
-        result = np.subtract(np.array(self.spring_f_vec(vertex)), np.array(strut_axis_f_vec))
         return np.subtract(np.array(self.spring_f_vec(vertex)), np.array(strut_axis_f_vec))
 
     @property
@@ -262,9 +276,10 @@ class Tendon(Member):
     def f_vector(self, vertex):
         """ return a vector parallel to the tendon that points away from vertex arg"""
         if vertex is self.vertices[1]:
-            return vector_scalar_multiply(self.vertices[0] - self.vertices[1], self.spring_f_mag)
+            # return vector_scalar_multiply(self.vertices[0] - self.vertices[1], self.spring_f_mag)
+            return vector_scalar_multiply(normalize(self.vertices[0] - self.vertices[1]), self.spring_f_mag)
         elif vertex is self.vertices[0]:
-            return vector_scalar_multiply(self.vertices[1] - self.vertices[0], self.spring_f_mag)
+            return vector_scalar_multiply(normalize(self.vertices[1] - self.vertices[0]), self.spring_f_mag)
         else:
             raise Exception('Expected vertex to belong to member')
 
@@ -628,12 +643,17 @@ class Tensegrity:
                 z = [vertex.coordinates[2] for vertex in tendon.vertices]
                 ax.plot3D(x, y, z, 'grey', linewidth=1)
         if lateral_f:
+            # scale the vectors so the plot looks better
+            scale_factor = 0.5
+
             for tendon in self.tendons:
                 for vertex in tendon.vertices:
-                    ax.quiver(*(vertex.coordinates + list(tendon.lateral_f_vec(vertex))), color='blue')
+                    coords = [c * scale_factor for c in tendon.lateral_f_vec(vertex)]
+                    ax.quiver(*(vertex.coordinates + coords), color='blue')
         if vertex_f:
             for vertex in self.vertices:
                 # scale the vectors so the plot looks better
+                scale_factor = 0.02
                 scale_factor = 0.1
                 coords = [c * scale_factor for c in vertex.f_vector]
                 # ax.quiver(*(vertex.coordinates + list(vertex.f_vector)), color='green',  arrow_length_ratio=0.01)
@@ -724,7 +744,7 @@ class Prism(Tensegrity):
         self.top_tendons = self.tendons[len(self.bot_t_vertices):len(self.top_t_vertices) + len(self.bot_t_vertices)]
         self.vertical_tendons = self.tendons[len(self.bot_t_vertices) + len(self.top_t_vertices):]
 
-    def balance_forces(self, verbose=0):
+    def balance_forces(self, verbose=0, debug=True):
         """ Assumes a known good symmetrical prism.
         Methodology:
         1. Assign an arbitrary force equally to bottom waist tendons
@@ -734,7 +754,7 @@ class Prism(Tensegrity):
         4. Check for equilibrium
         """
         # 1. Assign an arbitrary force equally to bottom waist tendons
-        bot_t_force = 1
+        bot_t_force = 10
         for tendon in self.bot_tendons:
             tendon.set_force(bot_t_force)
         # 2. Find the vertical tendon force that will balance the waist tendons in the plane orthogonal to the strut and
@@ -747,32 +767,59 @@ class Prism(Tensegrity):
             if len(waist_lateral_f_vecs) != 2:
                 raise Exception('Expected to find 2 bot_tendons for bot_vertex')
             waist_lateral_f_vec = vector_add(waist_lateral_f_vecs[0], waist_lateral_f_vecs[1])
+            vertical_lateral_f_vec = vector_scalar_multiply(waist_lateral_f_vec, -1)
             vertical_tendon = [tendon for tendon in vertex.tendons if tendon in self.vertical_tendons][0]
-            cos_alpha = (dot_product(vertical_tendon.axis_vector(vertex), vertex.strut.axis_vector(vertex)) /
-                         (vector_mag(vertical_tendon.axis_vector(vertex)) *
-                          vector_mag(vertex.strut.axis_vector(vertex))))
-            sin_alpha = (1 - cos_alpha ** 2) ** 0.5
-            vertical_tendon.set_force(vector_mag(waist_lateral_f_vec) / sin_alpha)
+            if vector_mag(cross_product(waist_lateral_f_vec, vertical_tendon.lateral_f_vec(vertex))) > stable_tol:
+                raise Exception('This tensegrity is not stable')
+            alpha = vec_angle(vertical_tendon.axis_vector(vertex), vertex.strut.axis_vector(vertex))
+            # phi = vec_angle(vertical_tendon.axis_vector(vertex), waist_lateral_f_vec)
+            phi = vec_angle(vertical_tendon.axis_vector(vertex), vertical_lateral_f_vec)
+            # cos_alpha = (dot_product(vertical_tendon.axis_vector(vertex), vertex.strut.axis_vector(vertex)) /
+            #              (vector_mag(vertical_tendon.axis_vector(vertex)) *
+            #               vector_mag(vertex.strut.axis_vector(vertex))))
+            # sin_alpha = (1 - cos_alpha ** 2) ** 0.5
+            vertical_tendon.set_force(vector_mag(vertical_lateral_f_vec) / math.cos(phi))
+            # vertical_tendon.set_force(vector_mag(waist_lateral_f_vec) / abs(vec_cos(vertical_tendon.axis_vector(vertex),
+            #                                                                     waist_lateral_f_vec)))
+
+            # vertical_tendon.set_force(vector_mag(waist_lateral_f_vec) * math.sin(alpha))
+
+            if debug:
+                pass
+                # print('dot_product(waist_lateral_f_vecs[0])',
+                #       dot_product(waist_lateral_f_vecs[0], vertex.strut.axis_vector(vertex)))
+                # print('dot_product(waist_lateral_f_vecs[1])',
+                #       dot_product(waist_lateral_f_vecs[1], vertex.strut.axis_vector(vertex)))
+                # print('dot_product(waist_lateral_f_vec)',
+                #       dot_product(waist_lateral_f_vec, vertex.strut.axis_vector(vertex)))
+                # print('** cross waist_lateral_f_vec x vertical_lateral_f_vec',
+                #       cross_product(waist_lateral_f_vec, vertical_tendon.lateral_f_vec(vertex)))
+                # print('waist_lateral_f_vecs[0] mag', vector_mag(waist_lateral_f_vecs[0]))
+                # print('waist_lateral_f_vecs[1] mag', vector_mag(waist_lateral_f_vecs[1]))
+                # waist_sum = vector_add(*[tendon.lateral_f_vec(vertex) for
+                #                          tendon in vertex.tendons if tendon in self.bot_tendons])
+                # print('lateral vec sum', vector_add(vertical_tendon.lateral_f_vec(vertex), waist_sum))
             if verbose > 1:
                 print('bot vertices f_vector', vertex.f_vector, 'cross with strut axis',
                       cross_product(vertex.f_vector, vertex.strut.axis_vector(vertex)))
         # 3. Find the top waist forces that will balance the vertical tendon forces in the top orthogonal planes
         for vertex in self.top_vertices:
-            # waist_lateral_f_vec = vector_add(waist_lateral_f_vecs[0], waist_lateral_f_vecs[1])
             vertical_tendon = [tendon for tendon in vertex.tendons if tendon in self.vertical_tendons][0]
-            cos_alpha = (dot_product(vertical_tendon.axis_vector(vertex), vertex.strut.axis_vector(vertex)) /
-                         (vector_mag(vertical_tendon.axis_vector(vertex)) *
-                          vector_mag(vertex.strut.axis_vector(vertex))))
-            tan_alpha = math.tan(math.acos(cos_alpha))
-            waist_lat_sum_f_mag = vertical_tendon.spring_f_mag * tan_alpha
-            tendon_axes = [tendon.axis_vector(vertex) for tendon in vertex.tendons if tendon in self.top_tendons]
-            phi = vec_angle(*[tendon.axis_vector(vertex) for tendon in vertex.tendons if tendon in self.top_tendons])
-            waist_lat_f_mag = (waist_lat_sum_f_mag / 2) * math.cos(phi / 2)
-            # waist_lat_f_mag = (waist_lat_sum_f_mag) * math.cos(phi / 2)
+            # debug
+            lat_f_vec = vertical_tendon.lateral_f_vec(vertex)
+            waist_lat_sum_vec = vector_scalar_multiply(vertical_tendon.lateral_f_vec(vertex), -1)
+            alpha = vec_angle(*[tendon.axis_vector(vertex) for tendon in vertex.tendons if tendon in self.top_tendons])
+            waist_lat_f_mag = (vector_mag(waist_lat_sum_vec) / 2) / math.cos(alpha / 2)
             for tendon in vertex.tendons:
                 if tendon in self.top_tendons:
-                    tendon.set_force(waist_lat_f_mag)
+                    theta = vec_angle(tendon.axis_vector(vertex), vertex.strut.axis_vector(vertex))
+                    tendon.set_force(waist_lat_f_mag / math.sin(theta))
+            if verbose > 1:
+                print('top vertices f_vector', vertex.f_vector, 'cross with strut axis',
+                      cross_product(vertex.f_vector, vertex.strut.axis_vector(vertex)))
         # 4. Check for equilibrium
+        if verbose > 1:
+            print('equilibrium is', self.equilibrium(0.5))
 
     # def solver_strut_twister(self):
     #     """ attempts to reach equilibrium by changing position of the top of the struts. Keeps all radial symmetries"""
