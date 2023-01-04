@@ -2,6 +2,7 @@
 import math
 import numpy as np
 import matplotlib.pyplot as plt
+import olof_1 as olof
 
 
 def rotate_list(li, x):
@@ -54,31 +55,52 @@ class Tendon:
     def __init__(self, vertices):
         self.vertices = vertices
 
+    def contract(self, d, vertex, constraint0, constraint1):
+        """ contract self by d and find the new vertex location while maintaining the constraint distances.
+        the constraints can be any member (tendon or strut) """
+
 
 class PrismTower:
-    def __init__(self, n=3, levels=2, radii=[3, 3], heights=[10, 10], verbose=0):
+    def __init__(self, n=3, levels=2, radii=[3, 3], strut_len=[10, 10], verbose=0):
         """ return 3 numpy.arrays that describe a stable tensegrity structure:
         vertex coordinates, tendon vertices, strut vertices """
         # Assume that the bottom vertices lie on the x,y plane
         # bottom vertices are fully described by the input parameters n and radii[0]
-        twist = 1  # twist = -1 will make a left (or is it right?) handed twist
+        self.n = n
+        self.levels = levels
+        # twist_sign = 1 will make a left-handed twist (right-handed = struts look like right-handed threads)
+        twist_sign = -1
+        twist = twist_sign * (math.pi / 2 - math.pi / self.n)
         theta_step = 2 * math.pi / n
         self.bot_vertices = [Vertex(np.array([radii[0] * math.cos(i * theta_step),
                                               radii[0] * math.sin(i * theta_step),
                                               0]))
                              for i in range(n)]
-        self.top_vertices = [Vertex(np.array([radii[1] * math.cos(i * theta_step),
-                                              radii[1] * math.sin(i * theta_step),
-                                              heights[0]]))
+        self.top_vertices = [Vertex(np.array([radii[1] * math.cos(i * theta_step - twist),
+                                              radii[1] * math.sin(i * theta_step - twist),
+                                              strut_len[0]]))
                              for i in range(n)]
-        self.struts = [Strut([v0, v1]) for v0, v1 in zip(self.bot_vertices, self.top_vertices)]
         self.bot_tendons = [Tendon([v0, v1]) for v0, v1 in zip(self.bot_vertices, rotate_list(self.bot_vertices, 1))]
         self.top_tendons = [Tendon([v0, v1]) for v0, v1 in zip(self.top_vertices, rotate_list(self.top_vertices, 1))]
-        self.vert_tendons = [Tendon([v0, v1]) for v0, v1 in zip(self.bot_vertices, rotate_list(self.top_vertices, 1))]
+        self.vert_tendons = [Tendon([v0, v1]) for v0, v1 in zip(self.bot_vertices, self.top_vertices)]
+        self.struts = [Strut([v0, v1]) for v0, v1 in zip(self.bot_vertices, rotate_list(self.top_vertices, twist_sign))]
         self.vertices = self.bot_vertices + self.top_vertices
         self.tendons = self.bot_tendons + self.top_tendons + self.vert_tendons
-        # for i in range(n):
-        #     Vertex(np.array(math.cos(i * theta_step), math.sin(i * theta_step), 0))
+
+    def get_forces(self):
+        struts = [[self.vertices.index(strut.vertices[0]),
+                   self.vertices.index(strut.vertices[1])] for strut in self.struts]
+        tendons = [[self.vertices.index(tendon.vertices[0]),
+                   self.vertices.index(tendon.vertices[1])] for tendon in self.tendons]
+        vertices = [vertex.coords for vertex in self.vertices]
+        forces = olof.solve_tensegrity_tensions(np.array(struts), np.array(tendons), np.array(vertices), verbose=True)
+        print('forces', forces)
+
+    def stabilize(self):
+        if self.levels == 1:
+            pass
+            """ Assumes we start with vertical struts """
+            # Confirm that there are two intersections b
 
     def plot(self, struts=True, tendons=True, lateral_f=False, vertex_f=False):
         """ plots tendons and struts using matplotlib """
@@ -183,6 +205,8 @@ class PrismTower:
 
 
 if __name__ == '__main__':
-    tower = PrismTower(n=3, levels=2, radii=[3, 3], heights=[10, 10], verbose=True)
+    tower = PrismTower(n=3, levels=2, radii=[3, 3], strut_len=[10, 10], verbose=True)
+    tower.get_forces()
     tower.print_cyl()
     tower.plot()
+
