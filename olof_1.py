@@ -84,7 +84,7 @@ def get_unit_force_vector(member, vertices):
     # matrix*x = 0 , and
     # x >= 0 elementwise, and
     # x's elements are reasonably size (~1).
-def find_positive_solutions(matrix, verbosity=1):
+def find_positive_solutions(matrix, verbosity=0):
     # TODO: This method is pretty gross and uses
     #  some heavy machinery that doesn't seem necessary...
     state = xalglib.minlpcreate(shape(matrix)[1])
@@ -100,8 +100,9 @@ def find_positive_solutions(matrix, verbosity=1):
     if verbosity > 0:
         print('alglib termination type: ', rep.terminationtype)
     if rep.terminationtype > 0:
-        return x
+        return x, rep.terminationtype
     else:
+        return None, None
         #TODO: Probably is a more elegent way to handle this case...
         # raise warnings("No solution found for tensegrity structure")
         if verbosity > 0:
