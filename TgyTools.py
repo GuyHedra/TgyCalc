@@ -70,6 +70,7 @@ def cartesian_coordinates(cyl_coords):
     rho, phi, z = cyl_coords
     return [rho * math.cos(phi), rho * math.sin(phi), z]
 
+
 class Vertex:
     def __init__(self, cartesian=None, cylindrical=None, step=0.1):
         if cylindrical:
