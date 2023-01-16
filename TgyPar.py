@@ -459,7 +459,8 @@ class PrismTower(Tensegrity):
             tendons.extend([Tendon([v0, v1], tendon_type='top_top')
                             for v0, v1 in zip(lower_vertex_list, rotate_list(upper_vertex_list, 1))])
             # vertical tendons bottom to bottom
-            if level > 1:
+            # if level > 1:
+            if redundant_tendons:
                 lower_vertex_list = [strut.bot_vertex for strut in [strut for strut in struts if strut.level == level]]
                 upper_vertex_list = [strut.bot_vertex
                                      for strut in [strut for strut in struts if strut.level == level + 1]]
@@ -602,12 +603,17 @@ if __name__ == '__main__':
         """ For levels = 1 PrismTower creates a Tensegrity that Olof's alglib code can balance 
             For levels > 1 PrismTower creates 'reasonable' structures, but the interlayer overlaps is just a guess
             provided by the user, so multi-level PrismTowers can't be balanced by Olof's alglib code"""
-        tower = PrismTower(n=3, levels=3, radii=[4, 4, 4, 4, 3], heights=[8, 8, 8, 8, 8], overlaps=[0.268, 0.268],
-                           verbose=True)
+        # tower = PrismTower(n=3, levels=3, radii=[4, 4, 4, 4, 3], heights=[8, 8, 8, 8, 8], overlaps=[0.268, 0.268],
+        #                    verbose=True)
+        tower = PrismTower(n=4, levels=4, radii=[4, 4, 4, 4, 3], heights=[8, 8, 8, 8, 8],
+                           overlaps=[0.172, 0.172, 0.1785], verbose=True)
+        tower = PrismTower(n=4, levels=6, radii=[4, 4, 4, 4, 4, 4, 4], heights=[8, 8, 8, 8, 8, 8, 8],
+                           overlaps=[0.172, 0.172, 0.1785, 0.1785, 0.1785, 0.1785], verbose=True)
         tower.get_forces()
         tower.print_cyl()
         tower.set_overlap(0)
         tower.set_overlap(1)
+        tower.set_overlap(2)
         tower.plot()
     if bojum_tower:
         tower = PrismTower(n=4, levels=5, radii=[6, 5, 2, 2, 2, 5], heights=[8, 8, 8, 8, 8], overlaps=[0], verbose=True)
