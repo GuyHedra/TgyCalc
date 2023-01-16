@@ -38,6 +38,7 @@ class TestDistance(unittest.TestCase):
             # print('c0, c1, x, d', c0, c1, x, v0.distance(v1))
             self.assertAlmostEqual(typ.distance(p0, p1), x)
 
+
 class TestVertex(unittest.TestCase):
     def test_distance(self):
         known_values = [[[1, 0, 0], [0, 0, 0], 1],

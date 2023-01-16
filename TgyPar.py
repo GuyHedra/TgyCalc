@@ -6,6 +6,7 @@ import olof_1 as olof
 
 len_tol = 0.1
 
+tendon_type_list = ['bot_top', 'bot_bot', 'top_top', 'waist']
 
 def rotate_list(li, x):
     return li[-x % len(li):] + li[:-x % len(li)]
@@ -88,14 +89,31 @@ class Strut:
     def other_vertex(self, vertex):
         return self.vertices[(self.vertices.index(vertex) + 1) % 2]
 
+    # @staticmethod
+    def position_vec(self, vertex):
+        """ returns the position vector (position vectors start at the origin) that points at the vertex arg"""
+        return [c0 - c1 for c0, c1 in zip(vertex.coords, self.other_vertex(vertex).coords)]
+
+    @property
+    def top_vertex(self):
+        return self.vertices[1]
+
+    @property
+    def bot_vertex(self):
+        return self.vertices[0]
+
     @property
     def curr_length(self):
         return distance(self.vertices[0].coords, self.vertices[1].coords)
 
 
 class Tendon:
-    def __init__(self, vertices, targ_length=None):
+    def __init__(self, vertices, tendon_type=None, targ_length=None):
         self.vertices = vertices
+        if tendon_type in tendon_type_list:
+            self.tendon_type = tendon_type
+        else:
+            raise Exception('tendon_type must be in tendon_type_list')
         self.force = None
         if not targ_length:
             self.targ_length = self.vertices[0].distance(self.vertices[1])
@@ -105,6 +123,11 @@ class Tendon:
 
     def other_vertex(self, vertex):
         return self.vertices[(self.vertices.index(vertex) + 1) % 2]
+
+    # @staticmethod
+    def position_vec(self, vertex):
+        """ returns the position vector (position vectors start at the origin) that points at the vertex arg"""
+        return [c0 - c1 for c0, c1 in zip(vertex.coords, self.other_vertex(vertex).coords)]
 
     @property
     def curr_length(self):
@@ -240,7 +263,8 @@ class Tensegrity:
         label_tendon = 'Tendon'
         label_strut = 'Strut'
         label_element = 'Element'
-        label_width = max([len(e) for e in [label_vertex, label_tendon, label_strut, label_element]])
+        label_width = max([len(e)
+                           for e in [label_vertex, label_tendon, label_strut, label_element] + tendon_type_list]) + 1
         heading_coord = 'Coordinates'
         heading_v0 = f'V0 {heading_coord}'
         heading_v1 = f'V1 {heading_coord}'
@@ -265,9 +289,10 @@ class Tensegrity:
             print(f'{"Element": <{label_width}}',
                   f'{heading_v0: <{array_3_width}}',
                   f'{heading_v1: <{array_3_width}}',
-                  f'{"targ length": <{array_3_width}}',
-                  f'{"curr length": <{array_3_width}}',
-                  f'{heading_v1: <{array_3_width}}',
+                  f'{"type": <{label_width}}',
+                  f'{"targ len": <{number_width}}',
+                  f'{"curr len": <{number_width}}',
+                  # f'{heading_v1: <{array_3_width}}',
                   # f'{"Force": <{array_3_width}}'
                   )
             print(f'{" ": <{label_width}}',
@@ -284,6 +309,7 @@ class Tensegrity:
                 print(f'{"Tendon": <{label_width}}',
                       f'{str(np.array(vertex0.cyl_coordinates_deg)): <{array_3_width}}',
                       f'{str(np.array(vertex1.cyl_coordinates_deg)): <{array_3_width}}',
+                      f'{tendon.tendon_type: <{label_width}}'
                       f'{str(round(tendon.targ_length, precision)): <{number_width}}'
                       f'{str(round(tendon.curr_length, precision)): <{number_width}}'
                       # f'{str(round(tendon.spring_f_mag, precision)): <{number_width}}'
@@ -315,7 +341,7 @@ class Tensegrity:
 
 
 # class PrismTower(Tensegrity):
-#     def __init__(self, n=3, levels=2, radii=[3, 3], heights=[10, 10], overlap=0.06, verbose=0):
+#     def __init__(self, n=3, levels=2, radii=[3, 3], heights=[10, 10], overlaps=0.06, verbose=0):
 #         """ return 3 numpy.arrays that describe a stable tensegrity structure:
 #         vertex coordinates, tendon vertices, strut vertices """
 #         # Assume that the bottom vertices lie on the x,y plane
@@ -354,7 +380,7 @@ class Tensegrity:
 #         Tensegrity.__init__(self, vertices, struts, tendons)
 
 class PrismTower(Tensegrity):
-    def __init__(self, n=3, levels=2, radii=[4, 3, 4], heights=[10, 10], overlap=0.2, verbose=0):
+    def __init__(self, n=3, levels=2, radii=[4, 3, 4], heights=[10, 10], overlaps=[0.2], verbose=0):
         """ return 3 numpy.arrays that describe a stable tensegrity structure:
         vertex coordinates, tendon vertices, strut vertices """
         # Assume that the bottom vertices lie on the x,y plane
@@ -363,10 +389,13 @@ class PrismTower(Tensegrity):
             raise Exception('the length of radii must be greater than levels + 1')
         if len(heights) < levels:
             raise Exception('levels must be equal to or less than the length of heights')
+        if len(overlaps) < levels - 1:
+            raise Exception('the length of overlaps must 1 less than the length of heights or greater')
         # redundant_tendons = True
         redundant_tendons = False
         self.n = n
         self.levels = levels
+        self.overlaps = overlaps
         vertices = []
         struts = []
         tendons = []
@@ -375,7 +404,11 @@ class PrismTower(Tensegrity):
         twist = twist_sign * (math.pi / 2 - math.pi / n)
         theta_step = 2 * math.pi / n
         theta_offset = 0
-        bot_z_list = [0] + [sum(heights[0:i]) * (1 - overlap) for i in range(1, len(heights))]
+        if levels > 1:
+            # bot_z_list = [0] + [sum(heights[0:i]) * (1 - self.overlaps[i - 1]) for i in range(1, len(heights))]
+            bot_z_list = [0] + [sum(heights[0:i]) * (1 - self.overlaps[i - 1]) for i in range(1, levels)]
+        else:
+            bot_z_list = [0]
         for level, radius, height in zip(range(levels), radii, heights):
             # first we create vertices and struts, they fit neatly into a layer
             bot_z = bot_z_list[level]
@@ -396,48 +429,81 @@ class PrismTower(Tensegrity):
             struts.extend([Strut([v0, v1], level=level) for v0, v1 in
                            zip(bot_vertices, rotate_list(top_vertices, twist_sign))])
             if redundant_tendons:
-                tendons.extend([Tendon([v0, v1]) for v0, v1 in
+                tendons.extend([Tendon([v0, v1], tendon_type='bot_top') for v0, v1 in
                                zip(bot_vertices, rotate_list(top_vertices, -twist_sign))])
-                tendons.extend([Tendon([v0, v1]) for v0, v1 in zip(bot_vertices, rotate_list(bot_vertices, 1))])
-                tendons.extend([Tendon([v0, v1]) for v0, v1 in zip(top_vertices, rotate_list(top_vertices, 1))])
+                tendons.extend([Tendon([v0, v1], tendon_type='waist') for v0, v1 in zip(bot_vertices, rotate_list(bot_vertices, 1))])
+                tendons.extend([Tendon([v0, v1], tendon_type='waist') for v0, v1 in zip(top_vertices, rotate_list(top_vertices, 1))])
             theta_offset += math.pi / n - twist
         # Tendons: now let's create the tendons, they can bridge layers
         # bottom tendons
         if not redundant_tendons:
-            vertex_list = [strut.vertices[0] for strut in [strut for strut in struts if strut.level == 0]]
-            tendons.extend([Tendon([v0, v1]) for v0, v1 in zip(vertex_list, rotate_list(vertex_list, 1))])
+            vertex_list = [strut.bot_vertex for strut in [strut for strut in struts if strut.level == 0]]
+            tendons.extend([Tendon([v0, v1], tendon_type='waist') for
+                            v0, v1 in zip(vertex_list, rotate_list(vertex_list, 1))])
             # top tendons
-            vertex_list = [strut.vertices[1] for strut in [strut for strut in struts if strut.level == self.levels - 1]]
-            tendons.extend([Tendon([v0, v1]) for v0, v1 in zip(vertex_list, rotate_list(vertex_list, 1))])
+            vertex_list = [strut.top_vertex for strut in [strut for strut in struts if strut.level == self.levels - 1]]
+            tendons.extend([Tendon([v0, v1], tendon_type='waist') for
+                            v0, v1 in zip(vertex_list, rotate_list(vertex_list, 1))])
         for level in range(levels - 1):
             # mid tendons (waist tendons that are not bottom or top, they connect the top of each layer to bottom of
             # the layer above)
-            lower_vertex_list = [strut.vertices[1] for strut in [strut for strut in struts if strut.level == level]]
-            upper_vertex_list = [strut.vertices[0] for strut in [strut for strut in struts if strut.level == level + 1]]
-            tendons.extend([Tendon([v0, v1]) for v0, v1 in zip(lower_vertex_list, rotate_list(upper_vertex_list, -1))])
-            tendons.extend([Tendon([v0, v1]) for v0, v1 in zip(rotate_list(lower_vertex_list, -1),
-                                                               rotate_list(upper_vertex_list, -1))])
+            lower_vertex_list = [strut.top_vertex for strut in [strut for strut in struts if strut.level == level]]
+            upper_vertex_list = [strut.bot_vertex for strut in [strut for strut in struts if strut.level == level + 1]]
+            tendons.extend([Tendon([v0, v1], tendon_type='waist')
+                            for v0, v1 in zip(lower_vertex_list, rotate_list(upper_vertex_list, -1))])
+            tendons.extend([Tendon([v0, v1], tendon_type='waist')
+                            for v0, v1 in zip(rotate_list(lower_vertex_list, -1), rotate_list(upper_vertex_list, -1))])
             # vertical tendons top to top
-            lower_vertex_list = [strut.vertices[1] for strut in [strut for strut in struts if strut.level == level]]
-            upper_vertex_list = [strut.vertices[1] for strut in [strut for strut in struts if strut.level == level + 1]]
-            tendons.extend([Tendon([v0, v1]) for v0, v1 in zip(lower_vertex_list, rotate_list(upper_vertex_list, 1))])
+            lower_vertex_list = [strut.top_vertex for strut in [strut for strut in struts if strut.level == level]]
+            upper_vertex_list = [strut.top_vertex for strut in [strut for strut in struts if strut.level == level + 1]]
+            tendons.extend([Tendon([v0, v1], tendon_type='top_top')
+                            for v0, v1 in zip(lower_vertex_list, rotate_list(upper_vertex_list, 1))])
             # vertical tendons bottom to bottom
-            lower_vertex_list = [strut.vertices[0] for strut in [strut for strut in struts if strut.level == level]]
-            upper_vertex_list = [strut.vertices[0] for strut in [strut for strut in struts if strut.level == level + 1]]
-            tendons.extend([Tendon([v0, v1]) for v0, v1 in zip(lower_vertex_list, rotate_list(upper_vertex_list, 1))])
+            if level > 1:
+                lower_vertex_list = [strut.bot_vertex for strut in [strut for strut in struts if strut.level == level]]
+                upper_vertex_list = [strut.bot_vertex
+                                     for strut in [strut for strut in struts if strut.level == level + 1]]
+                tendons.extend([Tendon([v0, v1], tendon_type='bot_bot')
+                                for v0, v1 in zip(lower_vertex_list, rotate_list(upper_vertex_list, 1))])
         # vertical tendons bottom to top
-        lower_vertex_list = [strut.vertices[0] for strut in [strut for strut in struts if strut.level == 0]]
-        upper_vertex_list = [strut.vertices[1] for strut in [strut for strut in struts if strut.level == 0]]
-        tendons.extend([Tendon([v0, v1]) for v0, v1 in zip(lower_vertex_list, rotate_list(upper_vertex_list, 1))])
+        lower_vertex_list = [strut.bot_vertex for strut in [strut for strut in struts if strut.level == 0]]
+        upper_vertex_list = [strut.top_vertex for strut in [strut for strut in struts if strut.level == 0]]
+        tendons.extend([Tendon([v0, v1], tendon_type='bot_top')
+                        for v0, v1 in zip(lower_vertex_list, rotate_list(upper_vertex_list, 1))])
+        self.vertices = vertices
+        self.tendons = tendons
+        self.struts = struts
+
         Tensegrity.__init__(self, vertices, struts, tendons)
 
+    # def strut_list(self, level=None):
+    #     if level:
+    #         return [strut for strut in self.struts if strut.level == level]
+    #     else:
+    #         return self.struts
 
-
-    def strut_list(self, level=None):
-        if level:
-            return [strut for strut in self.struts if strut.level == level]
-        else:
-            return self.struts
+    def set_overlap(self, level=0):
+        """ set overlaps such that waist tendons lie on same plane as strut
+        Assumes symmetrical (not bent) tower prism
+        level references the lowest of the two interfacing levels """
+        # for strut in self.struts:
+        #     print('strut level', strut.level)
+        #     if strut.level == level + 1:
+        #         waist_tendons = [tendon for tendon in strut.bot_vertex.tendons if tendon.tendon_type == 'waist']
+        #         waist_vectors = [tendon.position_vec(strut.bot_vertex) for tendon in waist_tendons]
+        #         waist_cross = np.cross(np.array(waist_vectors[0]), np.array(waist_vectors[1]))
+        #         overlap_cos = (np.dot(waist_cross, np.array(strut.position_vec(strut.bot_vertex))) /
+        #                        (np.linalg.norm(waist_cross) * np.linalg.norm(strut.position_vec(strut.bot_vertex))))
+        #         overlap_angle = math.acos(overlap_cos)
+        #         print('overlap angle', math.degrees(overlap_angle))
+        for strut in [strut for strut in self.struts if strut.level == level + 1]:
+            waist_tendons = [tendon for tendon in strut.bot_vertex.tendons if tendon.tendon_type == 'waist']
+            waist_vectors = [tendon.position_vec(strut.bot_vertex) for tendon in waist_tendons]
+            waist_cross = np.cross(np.array(waist_vectors[0]), np.array(waist_vectors[1]))
+            overlap_cos = (np.dot(waist_cross, np.array(strut.position_vec(strut.bot_vertex))) /
+                           (np.linalg.norm(waist_cross) * np.linalg.norm(strut.position_vec(strut.bot_vertex))))
+            overlap_angle = math.acos(overlap_cos)
+            print('overlap angle', math.degrees(overlap_angle))
 
     def stabilize(self):
         if self.levels == 1:
@@ -476,7 +542,7 @@ class KitePar(Tensegrity):
         while not done and step_count < max_steps:
             for strut in self.struts:
             # for strut in self.struts[:1]:
-                vertex = strut.vertices[1]  # this is the vertex that is moving
+                vertex = strut.top_vertex  # this is the vertex that is moving
                 tendons = vertex.tendons
                 #  we use tendon target lengths and strut current lengths to support our algorithmic strategy
                 trial_positions = trilateration(strut.other_vertex(vertex).coords,
@@ -506,11 +572,15 @@ class KitePar(Tensegrity):
 
 if __name__ == '__main__':
     prism_tower = True
+    # prism_tower = False
+    # prism_2_tower = True
+    prism_2_tower = False
     # bojum_tower = True
     bojum_tower = False
-    kite_par = True
-    # kite_par = False
+    # kite_par = True
+    kite_par = False
     if kite_par:
+        # Note: KitePar() is under construction and not ready for show time!
         kite = KitePar()
         # for strut in kite.struts:
         #     strut.set_length(strut.length * 0.9)
@@ -519,13 +589,28 @@ if __name__ == '__main__':
         kite.stretch_struts()
         kite.print_cyl(vertices=False)
         kite.plot(debug=True)
-    if prism_tower:
-        tower = PrismTower(n=3, levels=1, radii=[3, 2, 2, 3, 3], heights=[8, 8, 8, 8, 8], overlap=0, verbose=True)
+    if prism_2_tower:
+        """ For levels = 1 PrismTower creates a Tensegrity that Olof's alglib code can balance 
+            For levels > 1 PrismTower creates 'reasonable' structures, but the interlayer overlaps is just a guess
+            provided by the user, so multi-level PrismTowers can't be balanced by Olof's alglib code"""
+        tower = PrismTower(n=3, levels=2, radii=[4, 4, 4, 3, 3], heights=[8, 8], overlaps=[0.26], verbose=True)
         tower.get_forces()
         tower.print_cyl()
+        tower.set_overlap(0)
+        tower.plot()
+    if prism_tower:
+        """ For levels = 1 PrismTower creates a Tensegrity that Olof's alglib code can balance 
+            For levels > 1 PrismTower creates 'reasonable' structures, but the interlayer overlaps is just a guess
+            provided by the user, so multi-level PrismTowers can't be balanced by Olof's alglib code"""
+        tower = PrismTower(n=3, levels=3, radii=[4, 4, 4, 4, 3], heights=[8, 8, 8, 8, 8], overlaps=[0.268, 0.268],
+                           verbose=True)
+        tower.get_forces()
+        tower.print_cyl()
+        tower.set_overlap(0)
+        tower.set_overlap(1)
         tower.plot()
     if bojum_tower:
-        tower = PrismTower(n=4, levels=5, radii=[6, 5, 2, 2, 2, 5], heights=[8, 8, 8, 8, 8], overlap=0, verbose=True)
+        tower = PrismTower(n=4, levels=5, radii=[6, 5, 2, 2, 2, 5], heights=[8, 8, 8, 8, 8], overlaps=[0], verbose=True)
         # tower.print_cyl()
         tower.print_lengths()
         tower.plot(axes=False)

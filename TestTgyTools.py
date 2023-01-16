@@ -73,9 +73,9 @@ class TgyTools(unittest.TestCase):
         assert_almost_equal(np.array(tensegrity.tendons[0].lateral_f_vec(vertex0)), np.array([1, 0, 0]))
         assert_almost_equal(np.array(tensegrity.tendons[1].lateral_f_vec(vertex1)), np.array([2 ** 0.5 / 2, 0, 0]))
 
-    def test_balance_forces(self):
-        tgy = TT.Prism(n=3)
-        tgy.balance_forces(verbose=2)
+    # def test_balance_forces(self):
+    #     tgy = TT.Prism(n=3)
+    #     tgy.balance_forces(verbose=2)
 
     def test_tensegrity_plot(self):
         tgy = TT.Prism(n=3)

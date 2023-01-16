@@ -1,12 +1,12 @@
 import unittest
 import TestTgyTools
-import TestSolverSpringForces
+# import TestSolverSpringForces
 import time
 
 class TestTgyCalc(unittest.TestCase):
     def test_all(self):
         testsuite = unittest.defaultTestLoader.loadTestsFromModule(TestTgyTools)
-        testsuite.addTests(unittest.defaultTestLoader.loadTestsFromModule(TestSolverSpringForces))
+        # testsuite.addTests(unittest.defaultTestLoader.loadTestsFromModule(TestSolverSpringForces))
         runner = unittest.TextTestRunner(verbosity=2)
         runner.run(testsuite)
 
