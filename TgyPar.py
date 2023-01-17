@@ -474,8 +474,8 @@ class PrismTower(Tensegrity):
         self.vertices = vertices
         self.tendons = tendons
         self.struts = struts
-
         Tensegrity.__init__(self, vertices, struts, tendons)
+        # ** End __init__ for PrismTower
 
     # def strut_list(self, level=None):
     #     if level:
@@ -572,10 +572,10 @@ class KitePar(Tensegrity):
 
 
 if __name__ == '__main__':
-    prism_tower = True
-    # prism_tower = False
-    # prism_2_tower = True
-    prism_2_tower = False
+    # prism_tower = True
+    prism_tower = False
+    prism_2_tower = True
+    # prism_2_tower = False
     # bojum_tower = True
     bojum_tower = False
     # kite_par = True
