@@ -42,6 +42,22 @@ def trilateration(P1, P2, P3, r1, r2, r3):
     return K1, K2
 
 
+def prism_height(theta, strut_length, radii):
+    """ Return the height of a prism tensegrity"""
+    # Define a triangle whose hypotenuse is the strut, height is the height of the prism and base is the distance
+    # between the strut vertices projection onto the xy plane
+    strut_bottom = (radii[0], 0, 0)
+    strut_top_on_xy = (radii[1] * math.cos(theta), radii[1] * math.sin(theta), 0)
+    base = sum([(p0_coord - p1_coord) ** 2 for p0_coord, p1_coord in zip(strut_bottom, strut_top_on_xy)]) ** 0.5
+    return (strut_length ** 2 - base ** 2) ** 0.5
+
+
+class Hub:
+    def __init__(self, length, radius):
+        self.length = length
+        self.radius = radius
+
+
 class Vertex:
     def __init__(self, coords, level):
         self.coords = coords
@@ -242,6 +258,7 @@ class Tensegrity:
         for strut in self.struts:
             print(f'{"Strut": <{label_width}}',
                   f'{strut.level: <{number_width}}',
+                  # f'{index % (self.levels - 1): <{number_width}}',
                   f'{index % (self.levels - 1): <{number_width}}',
                   f'{str(round(strut.curr_length, precision)): <{number_width}}')
             index += 1
@@ -380,17 +397,21 @@ class Tensegrity:
 #         Tensegrity.__init__(self, vertices, struts, tendons)
 
 class PrismTower(Tensegrity):
-    def __init__(self, n=3, levels=2, radii=[4, 3, 4], heights=[10, 10], overlaps=[0.2], verbose=0):
+    def __init__(self, n=3, levels=2, radii=[4, 3, 4], heights=[10, 10], strut_lengths=None, overlaps=[0.2], verbose=0):
         """ return 3 numpy.arrays that describe a stable tensegrity structure:
-        vertex coordinates, tendon vertices, strut vertices """
+        vertex coordinates, tendon vertices, strut vertices
+        if strut_lengths are given, then heights are calculated from the strut_lengths and heights are ignored."""
         # Assume that the bottom vertices lie on the x,y plane
         # bottom vertices are fully described by the input parameters n and radii[0]
         if len(radii) < levels + 1:
             raise Exception('the length of radii must be greater than levels + 1')
-        if len(heights) < levels:
+        if len(heights) < levels and not strut_lengths:
             raise Exception('levels must be equal to or less than the length of heights')
         if len(overlaps) < levels - 1:
             raise Exception('the length of overlaps must 1 less than the length of heights or greater')
+        if strut_lengths and len(strut_lengths) < levels:
+            raise Exception('levels must be equal to or less than the length of strut_lengths')
+
         # redundant_tendons = True
         redundant_tendons = False
         self.n = n
@@ -402,6 +423,9 @@ class PrismTower(Tensegrity):
         # twist_sign = 1 will make a left-handed twist (right-handed = struts look like right-handed threads)
         twist_sign = -1
         twist = twist_sign * (math.pi / 2 - math.pi / n)
+        if strut_lengths:
+            self.heights = [prism_height(twist, length, [radii[i], radii[i+1]])
+                            for i, length in enumerate(strut_lengths)]
         theta_step = 2 * math.pi / n
         theta_offset = 0
         if levels > 1:
@@ -574,8 +598,9 @@ class KitePar(Tensegrity):
 if __name__ == '__main__':
     # prism_tower = True
     prism_tower = False
-    prism_2_tower = True
-    # prism_2_tower = False
+    prism_1_tower = True
+    # prism_2_tower = True
+    prism_2_tower = False
     # bojum_tower = True
     bojum_tower = False
     # kite_par = True
@@ -590,6 +615,15 @@ if __name__ == '__main__':
         kite.stretch_struts()
         kite.print_cyl(vertices=False)
         kite.plot(debug=True)
+    if prism_1_tower:
+        """ For levels = 1 PrismTower creates a Tensegrity that Olof's alglib code can balance 
+            For levels > 1 PrismTower creates 'reasonable' structures, but the interlayer overlaps is just a guess
+            provided by the user, so multi-level PrismTowers can't be balanced by Olof's alglib code"""
+        tower = PrismTower(n=3, levels=2, radii=[4, 4, 4, 3, 3], heights=[8, 8], overlaps=[0.26], verbose=True)
+        tower.get_forces()
+        tower.print_lengths()
+        tower.set_overlap(0)
+        tower.plot()
     if prism_2_tower:
         """ For levels = 1 PrismTower creates a Tensegrity that Olof's alglib code can balance 
             For levels > 1 PrismTower creates 'reasonable' structures, but the interlayer overlaps is just a guess

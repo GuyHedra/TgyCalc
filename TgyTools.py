@@ -293,7 +293,7 @@ class Tensegrity:
                        for vtx_indices in strut_vertices]
         self.tendons = [Tendon([self.vertices[vtx_indices[0]], self.vertices[vtx_indices[1]]])
                         for vtx_indices in tendon_vertices]
-        self.populate_members()
+        # self.populate_members()
 
     @property
     def members(self):

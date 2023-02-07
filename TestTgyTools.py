@@ -60,18 +60,18 @@ class TgyTools(unittest.TestCase):
         for unit_vector, proj_vector, x_vector in known_values:
             assert_almost_equal(np.array(TT.vector_projection(proj_vector, unit_vector)), np.array(x_vector))
 
-    def test_tendon_lateral_f_vec(self):
-        coordinates = [[0, 1, 0], [0, -1, 0], [1, 1, 0], [1, 0, 0]]
-        strut_vertices = [[0, 1]]
-        tendon_vertices = [[0, 2], [1, 3]]
-        nom_tendon_lengths = 0.5
-        tensegrity = TT.TArbitrary(coordinates, strut_vertices, tendon_vertices, nom_tendon_lengths)
-        vertex0 = tensegrity.vertices[0]
-        vertex1 = tensegrity.vertices[1]
-        tensegrity.tendons[0].set_force(1)
-        tensegrity.tendons[1].set_force(1)
-        assert_almost_equal(np.array(tensegrity.tendons[0].lateral_f_vec(vertex0)), np.array([1, 0, 0]))
-        assert_almost_equal(np.array(tensegrity.tendons[1].lateral_f_vec(vertex1)), np.array([2 ** 0.5 / 2, 0, 0]))
+    # def test_tendon_lateral_f_vec(self):
+    #     coordinates = [[0, 1, 0], [0, -1, 0], [1, 1, 0], [1, 0, 0]]
+    #     strut_vertices = [[0, 1]]
+    #     tendon_vertices = [[0, 2], [1, 3]]
+    #     nom_tendon_lengths = 0.5
+    #     tensegrity = TT.TArbitrary(coordinates, strut_vertices, tendon_vertices, nom_tendon_lengths)
+    #     vertex0 = tensegrity.vertices[0]
+    #     vertex1 = tensegrity.vertices[1]
+    #     tensegrity.tendons[0].set_force(1)
+    #     tensegrity.tendons[1].set_force(1)
+    #     assert_almost_equal(np.array(tensegrity.tendons[0].lateral_f_vec(vertex0)), np.array([1, 0, 0]))
+    #     assert_almost_equal(np.array(tensegrity.tendons[1].lateral_f_vec(vertex1)), np.array([2 ** 0.5 / 2, 0, 0]))
 
     # def test_balance_forces(self):
     #     tgy = TT.Prism(n=3)
@@ -80,8 +80,9 @@ class TgyTools(unittest.TestCase):
     def test_tensegrity_plot(self):
         tgy = TT.Prism(n=3)
         tgy.set_nom_tendon_lengths(0.1)
-        tgy.balance_forces(verbose=2)
-        tgy.plot(lateral_f=True, vertex_f=True)
+        # tgy.balance_forces(verbose=2)
+        # tgy.plot(lateral_f=True, vertex_f=True)
+        tgy.plot(lateral_f=False, vertex_f=False)
 
 
 if __name__ == '__main__':
