@@ -1,8 +1,37 @@
 import unittest
 import math
-import TgyPar as typ
+import TgyPar as TP
 import numpy as np
 from numpy.testing import assert_almost_equal
+
+
+class PrismRef:
+    def __init__(self, name):
+        if name == 'n=3, levels=1':
+            """ From Geodesic Math and how to use it"""
+            self.n = 3
+            self.heights = [1]
+            self.radii = [0.5, 0.5]
+            self.strut_length = 1.3903
+            self.bot_top = 1.03
+            self.waist = 0.866
+        else:
+            raise Exception('name', name, 'is not supported')
+
+
+class TestTowerPrism(unittest.TestCase):
+    def test_known_values(self):
+        """ specify strut length"""
+        ref_tower = PrismRef('n=3, levels=1')
+        tower = TP.PrismTower(n=ref_tower.n, levels=1, radii=ref_tower.radii, strut_lengths=[ref_tower.strut_length])
+        assert_almost_equal(tower.struts[0].curr_length, ref_tower.strut_length, 4)
+        tower.print_lengths()
+        """ specify height """
+        ref_tower = PrismRef('n=3, levels=1')
+        tower = TP.PrismTower(n=ref_tower.n, levels=1, radii=ref_tower.radii, heights=ref_tower.heights)
+        assert_almost_equal(tower.struts[0].curr_length, ref_tower.strut_length, 4)
+
+
 
 
 class TestTrilateration(unittest.TestCase):
@@ -22,7 +51,7 @@ class TestTrilateration(unittest.TestCase):
              [0, -1, 1 / 2 ** 0.5]]
         ]
         for p1, p2, p3, r1, r2, r3, x1, x2 in known_values:
-            k1, k2 = typ.trilateration(p1, p2, p3, r1, r2, r3)
+            k1, k2 = TP.trilateration(p1, p2, p3, r1, r2, r3)
             assert_almost_equal(np.array(k1), np.array(x1))
             assert_almost_equal(np.array(k2), np.array(x2))
 
@@ -33,10 +62,10 @@ class TestDistance(unittest.TestCase):
                         [[1, 1, 0], [-1, -1, 0], 2 ** 0.5 * 2],
                         [[2, 2, 0], [0, 0, 0], 2 ** 0.5 * 2]]
         for p0, p1, x in known_values:
-            # v0 = typ.Vertex(c0, level=0)
-            # v1 = typ.Vertex(c1, level=0)
+            # v0 = TP.Vertex(c0, level=0)
+            # v1 = TP.Vertex(c1, level=0)
             # print('c0, c1, x, d', c0, c1, x, v0.distance(v1))
-            self.assertAlmostEqual(typ.distance(p0, p1), x)
+            self.assertAlmostEqual(TP.distance(p0, p1), x)
 
 
 class TestVertex(unittest.TestCase):
@@ -45,8 +74,8 @@ class TestVertex(unittest.TestCase):
                         [[1, 1, 0], [-1, -1, 0], 2 ** 0.5 * 2],
                         [[2, 2, 0], [0, 0, 0], 2 ** 0.5 * 2]]
         for c0, c1, x in known_values:
-            v0 = typ.Vertex(c0, level=0)
-            v1 = typ.Vertex(c1, level=0)
+            v0 = TP.Vertex(c0, level=0)
+            v1 = TP.Vertex(c1, level=0)
             # print('c0, c1, x, d', c0, c1, x, v0.distance(v1))
             self.assertAlmostEqual(v0.distance(v1), x)
 

@@ -42,12 +42,13 @@ def trilateration(P1, P2, P3, r1, r2, r3):
     return K1, K2
 
 
-def prism_height(theta, strut_length, radii):
+def prism_height(strut_theta, strut_length, radii):
     """ Return the height of a prism tensegrity"""
     # Define a triangle whose hypotenuse is the strut, height is the height of the prism and base is the distance
     # between the strut vertices projection onto the xy plane
+    strut_theta = abs(strut_theta)
     strut_bottom = (radii[0], 0, 0)
-    strut_top_on_xy = (radii[1] * math.cos(theta), radii[1] * math.sin(theta), 0)
+    strut_top_on_xy = (radii[1] * math.cos(strut_theta), radii[1] * math.sin(strut_theta), 0)
     base = sum([(p0_coord - p1_coord) ** 2 for p0_coord, p1_coord in zip(strut_bottom, strut_top_on_xy)]) ** 0.5
     return (strut_length ** 2 - base ** 2) ** 0.5
 
@@ -124,8 +125,9 @@ class Strut:
 
 
 class Tendon:
-    def __init__(self, vertices, tendon_type=None, targ_length=None):
+    def __init__(self, vertices, level=None, tendon_type=None, targ_length=None):
         self.vertices = vertices
+        self.level = level
         if tendon_type in tendon_type_list:
             self.tendon_type = tendon_type
         else:
@@ -254,18 +256,24 @@ class Tensegrity:
               f'{"Level": <{number_width}}',
               f'{"Index": <{number_width}}',
               f'{"Length": <{number_width}}')
-        index = 0
-        for strut in self.struts:
+        for index, strut in enumerate(self.struts):
             print(f'{"Strut": <{label_width}}',
                   f'{strut.level: <{number_width}}',
                   # f'{index % (self.levels - 1): <{number_width}}',
-                  f'{index % (self.levels - 1): <{number_width}}',
+                  f'{index % self.n: <{number_width}}',
                   f'{str(round(strut.curr_length, precision)): <{number_width}}')
-            index += 1
-        for tendon in self.tendons:
-            print(f'{"Strut": <{label_width}}',
+        print(f'{"Element": <{label_width}}',
+              f'{"Type": <{label_width}}',
+              f'{"Level": <{number_width}}',
+              f'{"Index": <{number_width}}',
+              f'{"Length": <{number_width}}')
+        for index, tendon in enumerate(self.tendons):
+            print(f'{"Tendon": <{label_width}}',
+                  f'{tendon.tendon_type: <{label_width}}',
                   f'{tendon.level: <{number_width}}',
-                  f'{index % (self.levels - 1): <{number_width}}',
+                  # todo the line below incorrectly labels the index for waist tendons that are not at the very top or
+                  # bottom
+                  f'{index % self.n: <{number_width}}',
                   f'{str(round(tendon.curr_length, precision)): <{number_width}}')
             index += 1
 
@@ -424,8 +432,8 @@ class PrismTower(Tensegrity):
         twist_sign = -1
         twist = twist_sign * (math.pi / 2 - math.pi / n)
         if strut_lengths:
-            self.heights = [prism_height(twist, length, [radii[i], radii[i+1]])
-                            for i, length in enumerate(strut_lengths)]
+            heights = [prism_height(abs(twist) + 2 * math.pi / n, length, [radii[i], radii[i+1]])
+                       for i, length in enumerate(strut_lengths)]
         theta_step = 2 * math.pi / n
         theta_offset = 0
         if levels > 1:
@@ -453,34 +461,36 @@ class PrismTower(Tensegrity):
             struts.extend([Strut([v0, v1], level=level) for v0, v1 in
                            zip(bot_vertices, rotate_list(top_vertices, twist_sign))])
             if redundant_tendons:
-                tendons.extend([Tendon([v0, v1], tendon_type='bot_top') for v0, v1 in
+                tendons.extend([Tendon([v0, v1], level=level, tendon_type='bot_top') for v0, v1 in
                                zip(bot_vertices, rotate_list(top_vertices, -twist_sign))])
-                tendons.extend([Tendon([v0, v1], tendon_type='waist') for v0, v1 in zip(bot_vertices, rotate_list(bot_vertices, 1))])
-                tendons.extend([Tendon([v0, v1], tendon_type='waist') for v0, v1 in zip(top_vertices, rotate_list(top_vertices, 1))])
+                tendons.extend([Tendon([v0, v1], level=max(v0.level, v1.level), tendon_type='waist') for v0, v1 in
+                                zip(bot_vertices, rotate_list(bot_vertices, 1))])
+                tendons.extend([Tendon([v0, v1], level=max(v0.level, v1.level), tendon_type='waist') for v0, v1 in
+                                zip(top_vertices, rotate_list(top_vertices, 1))])
             theta_offset += math.pi / n - twist
         # Tendons: now let's create the tendons, they can bridge layers
         # bottom tendons
         if not redundant_tendons:
             vertex_list = [strut.bot_vertex for strut in [strut for strut in struts if strut.level == 0]]
-            tendons.extend([Tendon([v0, v1], tendon_type='waist') for
+            tendons.extend([Tendon([v0, v1], level=max(v0.level, v1.level), tendon_type='waist') for
                             v0, v1 in zip(vertex_list, rotate_list(vertex_list, 1))])
             # top tendons
             vertex_list = [strut.top_vertex for strut in [strut for strut in struts if strut.level == self.levels - 1]]
-            tendons.extend([Tendon([v0, v1], tendon_type='waist') for
+            tendons.extend([Tendon([v0, v1], level=self.levels, tendon_type='waist') for
                             v0, v1 in zip(vertex_list, rotate_list(vertex_list, 1))])
         for level in range(levels - 1):
             # mid tendons (waist tendons that are not bottom or top, they connect the top of each layer to bottom of
             # the layer above)
             lower_vertex_list = [strut.top_vertex for strut in [strut for strut in struts if strut.level == level]]
             upper_vertex_list = [strut.bot_vertex for strut in [strut for strut in struts if strut.level == level + 1]]
-            tendons.extend([Tendon([v0, v1], tendon_type='waist')
+            tendons.extend([Tendon([v0, v1], level=max(v0.level, v1.level), tendon_type='waist')
                             for v0, v1 in zip(lower_vertex_list, rotate_list(upper_vertex_list, -1))])
-            tendons.extend([Tendon([v0, v1], tendon_type='waist')
+            tendons.extend([Tendon([v0, v1], level=max(v0.level, v1.level), tendon_type='waist')
                             for v0, v1 in zip(rotate_list(lower_vertex_list, -1), rotate_list(upper_vertex_list, -1))])
             # vertical tendons top to top
             lower_vertex_list = [strut.top_vertex for strut in [strut for strut in struts if strut.level == level]]
             upper_vertex_list = [strut.top_vertex for strut in [strut for strut in struts if strut.level == level + 1]]
-            tendons.extend([Tendon([v0, v1], tendon_type='top_top')
+            tendons.extend([Tendon([v0, v1], level=level, tendon_type='top_top')
                             for v0, v1 in zip(lower_vertex_list, rotate_list(upper_vertex_list, 1))])
             # vertical tendons bottom to bottom
             # if level > 1:
@@ -488,12 +498,12 @@ class PrismTower(Tensegrity):
                 lower_vertex_list = [strut.bot_vertex for strut in [strut for strut in struts if strut.level == level]]
                 upper_vertex_list = [strut.bot_vertex
                                      for strut in [strut for strut in struts if strut.level == level + 1]]
-                tendons.extend([Tendon([v0, v1], tendon_type='bot_bot')
+                tendons.extend([Tendon([v0, v1], level=level, tendon_type='bot_bot')
                                 for v0, v1 in zip(lower_vertex_list, rotate_list(upper_vertex_list, 1))])
         # vertical tendons bottom to top
         lower_vertex_list = [strut.bot_vertex for strut in [strut for strut in struts if strut.level == 0]]
         upper_vertex_list = [strut.top_vertex for strut in [strut for strut in struts if strut.level == 0]]
-        tendons.extend([Tendon([v0, v1], tendon_type='bot_top')
+        tendons.extend([Tendon([v0, v1], level=0, tendon_type='bot_top')
                         for v0, v1 in zip(lower_vertex_list, rotate_list(upper_vertex_list, 1))])
         self.vertices = vertices
         self.tendons = tendons
@@ -598,7 +608,10 @@ class KitePar(Tensegrity):
 if __name__ == '__main__':
     # prism_tower = True
     prism_tower = False
-    prism_1_tower = True
+    # prism_1_s_len = False
+    prism_1_s_len = True
+    # prism_1_tower = True
+    prism_1_tower = False
     # prism_2_tower = True
     prism_2_tower = False
     # bojum_tower = True
@@ -619,7 +632,17 @@ if __name__ == '__main__':
         """ For levels = 1 PrismTower creates a Tensegrity that Olof's alglib code can balance 
             For levels > 1 PrismTower creates 'reasonable' structures, but the interlayer overlaps is just a guess
             provided by the user, so multi-level PrismTowers can't be balanced by Olof's alglib code"""
-        tower = PrismTower(n=3, levels=2, radii=[4, 4, 4, 3, 3], heights=[8, 8], overlaps=[0.26], verbose=True)
+        tower = PrismTower(n=3, levels=1, radii=[4, 4, 4, 3, 3], heights=[8, 8], overlaps=[0.26], verbose=True)
+        tower.get_forces()
+        tower.print_lengths()
+        tower.set_overlap(0)
+        tower.plot()
+    if prism_1_s_len: # specify strut_length instead of height
+        """ For levels = 1 PrismTower creates a Tensegrity that Olof's alglib code can balance 
+            For levels > 1 PrismTower creates 'reasonable' structures, but the interlayer overlaps is just a guess
+            provided by the user, so multi-level PrismTowers can't be balanced by Olof's alglib code"""
+        tower = PrismTower(n=3, levels=1, strut_lengths=[11.123, 11.123], radii=[4, 4, 4, 3, 3], heights=[8, 8],
+                           overlaps=[0.26], verbose=True)
         tower.get_forces()
         tower.print_lengths()
         tower.set_overlap(0)
@@ -631,6 +654,7 @@ if __name__ == '__main__':
         tower = PrismTower(n=3, levels=2, radii=[4, 4, 4, 3, 3], heights=[8, 8], overlaps=[0.26], verbose=True)
         tower.get_forces()
         tower.print_cyl()
+        tower.print_lengths()
         tower.set_overlap(0)
         tower.plot()
     if prism_tower:
