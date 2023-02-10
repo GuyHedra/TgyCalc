@@ -248,10 +248,15 @@ class Tensegrity:
                 # plot_cross()
         plt.show()
 
-    def print_lengths(self):
+    def print_build(self):
         precision = 3
         label_width = len("Element")
         number_width = 11
+        print('*** Prism Tower Build Data ***')
+        print('n =', self.n)
+        print('levels =', self.levels)
+        print('radii =', self.radii)
+        print('heights =', self.heights)
         print(f'{"Element": <{label_width}}',
               f'{"Level": <{number_width}}',
               f'{"Index": <{number_width}}',
@@ -275,7 +280,6 @@ class Tensegrity:
                   # bottom
                   f'{index % self.n: <{number_width}}',
                   f'{str(round(tendon.curr_length, precision)): <{number_width}}')
-            index += 1
 
     def print_cyl(self, vertices=True, struts=True, tendons=True):
         np.set_printoptions(formatter={'float': '{: 10.3f}'.format})
@@ -419,11 +423,13 @@ class PrismTower(Tensegrity):
             raise Exception('the length of overlaps must 1 less than the length of heights or greater')
         if strut_lengths and len(strut_lengths) < levels:
             raise Exception('levels must be equal to or less than the length of strut_lengths')
-
+        if strut_lengths and len(strut_lengths) + 1 > len(radii):
+            raise Exception('The length of strut_lengths must be one greater or more than the length of radii')
         # redundant_tendons = True
         redundant_tendons = False
         self.n = n
         self.levels = levels
+        self.radii = radii
         self.overlaps = overlaps
         vertices = []
         struts = []
@@ -432,21 +438,23 @@ class PrismTower(Tensegrity):
         twist_sign = -1
         twist = twist_sign * (math.pi / 2 - math.pi / n)
         if strut_lengths:
-            heights = [prism_height(abs(twist) + 2 * math.pi / n, length, [radii[i], radii[i+1]])
+
+            self.heights = [prism_height(abs(twist) + 2 * math.pi / n, length, [self.radii[i], self.radii[i+1]])
                        for i, length in enumerate(strut_lengths)]
+        else:
+            self.heights = heights
         theta_step = 2 * math.pi / n
         theta_offset = 0
         if levels > 1:
-            # bot_z_list = [0] + [sum(heights[0:i]) * (1 - self.overlaps[i - 1]) for i in range(1, len(heights))]
-            bot_z_list = [0] + [sum(heights[0:i]) * (1 - self.overlaps[i - 1]) for i in range(1, levels)]
+            bot_z_list = [0] + [sum(self.heights[0:i]) * (1 - self.overlaps[i - 1]) for i in range(1, levels)]
         else:
             bot_z_list = [0]
-        for level, radius, height in zip(range(levels), radii, heights):
+        for level, radius, height in zip(range(levels), self.radii, self.heights):
             # first we create vertices and struts, they fit neatly into a layer
             bot_z = bot_z_list[level]
-            bot_radius = radii[level]
-            top_radius = radii[level + 1]
-            # top_z = bot_z + heights[level]
+            bot_radius = self.radii[level]
+            top_radius = self.radii[level + 1]
+            # top_z = bot_z + self.heights[level]
             top_z = bot_z + height
             bot_vertices = [Vertex(np.array([bot_radius * math.cos(i * theta_step + theta_offset),
                                              bot_radius * math.sin(i * theta_step + theta_offset),
@@ -632,29 +640,29 @@ if __name__ == '__main__':
         """ For levels = 1 PrismTower creates a Tensegrity that Olof's alglib code can balance 
             For levels > 1 PrismTower creates 'reasonable' structures, but the interlayer overlaps is just a guess
             provided by the user, so multi-level PrismTowers can't be balanced by Olof's alglib code"""
-        tower = PrismTower(n=3, levels=1, radii=[4, 4, 4, 3, 3], heights=[8, 8], overlaps=[0.26], verbose=True)
+        tower = PrismTower(n=3, levels=1, radii=[4, 4], heights=[8], verbose=True)
         tower.get_forces()
-        tower.print_lengths()
+        tower.print_build()
         tower.set_overlap(0)
         tower.plot()
-    if prism_1_s_len: # specify strut_length instead of height
+    if prism_1_s_len:  # specify strut_length instead of height
         """ For levels = 1 PrismTower creates a Tensegrity that Olof's alglib code can balance 
             For levels > 1 PrismTower creates 'reasonable' structures, but the interlayer overlaps is just a guess
             provided by the user, so multi-level PrismTowers can't be balanced by Olof's alglib code"""
-        tower = PrismTower(n=3, levels=1, strut_lengths=[11.123, 11.123], radii=[4, 4, 4, 3, 3], heights=[8, 8],
+        tower = PrismTower(n=3, levels=1, strut_lengths=[11.123], radii=[4, 4], heights=[99, 99],
                            overlaps=[0.26], verbose=True)
         tower.get_forces()
-        tower.print_lengths()
+        tower.print_build()
         tower.set_overlap(0)
         tower.plot()
     if prism_2_tower:
         """ For levels = 1 PrismTower creates a Tensegrity that Olof's alglib code can balance 
             For levels > 1 PrismTower creates 'reasonable' structures, but the interlayer overlaps is just a guess
             provided by the user, so multi-level PrismTowers can't be balanced by Olof's alglib code"""
-        tower = PrismTower(n=3, levels=2, radii=[4, 4, 4, 3, 3], heights=[8, 8], overlaps=[0.26], verbose=True)
+        tower = PrismTower(n=3, levels=2, radii=[4, 4, 4], heights=[8, 8], overlaps=[0.26], verbose=True)
         tower.get_forces()
         tower.print_cyl()
-        tower.print_lengths()
+        tower.print_build()
         tower.set_overlap(0)
         tower.plot()
     if prism_tower:
@@ -674,8 +682,8 @@ if __name__ == '__main__':
         tower.set_overlap(2)
         tower.plot()
     if bojum_tower:
-        tower = PrismTower(n=4, levels=5, radii=[6, 5, 2, 2, 2, 5], heights=[8, 8, 8, 8, 8], overlaps=[0], verbose=True)
+        tower = PrismTower(n=4, levels=5, radii=[6, 5, 2, 2, 2, 5], heights=[8, 8, 8, 8, 8], overlaps=[0, 0, 0, 0], verbose=True)
         # tower.print_cyl()
-        tower.print_lengths()
+        tower.print_build()
         tower.plot(axes=False)
 

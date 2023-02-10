@@ -25,13 +25,11 @@ class TestTowerPrism(unittest.TestCase):
         ref_tower = PrismRef('n=3, levels=1')
         tower = TP.PrismTower(n=ref_tower.n, levels=1, radii=ref_tower.radii, strut_lengths=[ref_tower.strut_length])
         assert_almost_equal(tower.struts[0].curr_length, ref_tower.strut_length, 4)
-        tower.print_lengths()
+        tower.print_build()
         """ specify height """
         ref_tower = PrismRef('n=3, levels=1')
         tower = TP.PrismTower(n=ref_tower.n, levels=1, radii=ref_tower.radii, heights=ref_tower.heights)
         assert_almost_equal(tower.struts[0].curr_length, ref_tower.strut_length, 4)
-
-
 
 
 class TestTrilateration(unittest.TestCase):
