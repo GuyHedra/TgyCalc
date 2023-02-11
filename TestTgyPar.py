@@ -78,5 +78,13 @@ class TestVertex(unittest.TestCase):
             self.assertAlmostEqual(v0.distance(v1), x)
 
 
+class TestAngle(unittest.TestCase):
+    def test_known_values(self):
+        p0 = [0, 0, 1]
+        p1 = [1, 0, 0]
+        value = TP.angle(p0, p1)
+        self.assertAlmostEqual(value, math.pi / 2)
+
+
 if __name__ == '__main__':
     unittest.main()

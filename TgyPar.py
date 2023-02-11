@@ -8,12 +8,33 @@ len_tol = 0.1
 
 tendon_type_list = ['bot_top', 'bot_bot', 'top_top', 'waist']
 
+
 def rotate_list(li, x):
     return li[-x % len(li):] + li[:-x % len(li)]
 
 
 def distance(p0, p1):
     return sum([(c0 - c1) ** 2 for c0, c1 in zip(p0, p1)]) ** 0.5
+
+
+def angle(vec0, vec1):
+    """ returns the acute angle between two free vectors """
+    # if not isinstance(vec0, Point):
+    #     raise TypeError('vec0 must be of type Point')
+    # if not isinstance(vec1, Point):
+    #     raise TypeError('vec1 must be of type Point')
+    # value = math.acos(dotproduct(vec0, vec1) / (vec0.magnitude * vec1.magnitude))
+    p0 = np.array(vec0)
+    p1 = np.array(vec1)
+    # dot = np.dot(p0, p1)
+    # norm0 = np.linalg.norm(p0)
+    # norm1 = np.linalg.norm(p1)
+    value = math.acos(np.dot(p0, p1) / (np.linalg.norm(p0) * np.linalg.norm(p1)))
+    # value = math.acos(dotproduct(vec0, vec1) / (point0.magnitude * vec1.magnitude))
+    # if the angle is greater than pi / 2 then it is the obtuse angle, and we want the acute angle
+    if value > math.pi / 2:
+        value = math.pi - value
+    return value
 
 
 def midpoint(p0, p1):
@@ -60,9 +81,10 @@ class Hub:
 
 
 class Vertex:
-    def __init__(self, coords, level):
+    def __init__(self, coords, level, hub=None):
         self.coords = coords
         self.level = level
+        self.hub = hub
         self.strut = None
         self.tendons = []
 
@@ -123,6 +145,10 @@ class Strut:
     def curr_length(self):
         return distance(self.vertices[0].coords, self.vertices[1].coords)
 
+    @property
+    def build_length(self):
+        return self.curr_length - self.vertices[0].hub.length - self.vertices[1].hub.length
+
 
 class Tendon:
     def __init__(self, vertices, level=None, tendon_type=None, targ_length=None):
@@ -150,6 +176,14 @@ class Tendon:
     @property
     def curr_length(self):
         return distance(self.vertices[0].coords, self.vertices[1].coords)
+
+    @property
+    def build_length(self):
+        angle0 = angle(self.position_vec(self.vertices[0]), self.vertices[0].strut.position_vec(self.vertices[0]))
+        offset0 = self.vertices[0].hub.radius * math.cos(angle0)
+        angle1 = angle(self.position_vec(self.vertices[1]), self.vertices[1].strut.position_vec(self.vertices[1]))
+        offset1 = self.vertices[1].hub.radius * math.cos(angle1)
+        return self.curr_length - offset0 - offset1
 
     @property
     def loose(self):
@@ -250,28 +284,33 @@ class Tensegrity:
 
     def print_build(self):
         precision = 3
+        np.set_printoptions(formatter={'float': '{: 10.3f}'.format})
         label_width = len("Element")
-        number_width = 11
+        number_width = len("Finish Length")
+        # number_width = 11
         print('*** Prism Tower Build Data ***')
         print('n =', self.n)
         print('levels =', self.levels)
-        print('radii =', self.radii)
-        print('heights =', self.heights)
+        print('radii =', np.array(self.radii))
+        print('heights =', np.array(self.heights))
         print(f'{"Element": <{label_width}}',
               f'{"Level": <{number_width}}',
               f'{"Index": <{number_width}}',
-              f'{"Length": <{number_width}}')
+              f'{"Finish Length": <{number_width}}',
+              f'{"Build Length": <{number_width}}')
         for index, strut in enumerate(self.struts):
             print(f'{"Strut": <{label_width}}',
                   f'{strut.level: <{number_width}}',
                   # f'{index % (self.levels - 1): <{number_width}}',
                   f'{index % self.n: <{number_width}}',
-                  f'{str(round(strut.curr_length, precision)): <{number_width}}')
+                  f'{str(round(strut.curr_length, precision)): <{number_width}}',
+                  f'{str(round(strut.build_length, precision)): <{number_width}}')
         print(f'{"Element": <{label_width}}',
               f'{"Type": <{label_width}}',
               f'{"Level": <{number_width}}',
               f'{"Index": <{number_width}}',
-              f'{"Length": <{number_width}}')
+              f'{"Finish Length": <{number_width}}',
+              f'{"Build Length": <{number_width}}')
         for index, tendon in enumerate(self.tendons):
             print(f'{"Tendon": <{label_width}}',
                   f'{tendon.tendon_type: <{label_width}}',
@@ -279,7 +318,8 @@ class Tensegrity:
                   # todo the line below incorrectly labels the index for waist tendons that are not at the very top or
                   # bottom
                   f'{index % self.n: <{number_width}}',
-                  f'{str(round(tendon.curr_length, precision)): <{number_width}}')
+                  f'{str(round(tendon.curr_length, precision)): <{number_width}}',
+                  f'{str(round(tendon.build_length, precision)): <{number_width}}')
 
     def print_cyl(self, vertices=True, struts=True, tendons=True):
         np.set_printoptions(formatter={'float': '{: 10.3f}'.format})
@@ -409,12 +449,11 @@ class Tensegrity:
 #         Tensegrity.__init__(self, vertices, struts, tendons)
 
 class PrismTower(Tensegrity):
-    def __init__(self, n=3, levels=2, radii=[4, 3, 4], heights=[10, 10], strut_lengths=None, overlaps=[0.2], verbose=0):
+    def __init__(self, n=3, levels=2, radii=[4, 3, 4], heights=[10, 10], strut_lengths=None, overlaps=[0.2],
+                 hub_length=0, hub_radius=0, verbose=0):
         """ return 3 numpy.arrays that describe a stable tensegrity structure:
         vertex coordinates, tendon vertices, strut vertices
         if strut_lengths are given, then heights are calculated from the strut_lengths and heights are ignored."""
-        # Assume that the bottom vertices lie on the x,y plane
-        # bottom vertices are fully described by the input parameters n and radii[0]
         if len(radii) < levels + 1:
             raise Exception('the length of radii must be greater than levels + 1')
         if len(heights) < levels and not strut_lengths:
@@ -431,6 +470,7 @@ class PrismTower(Tensegrity):
         self.levels = levels
         self.radii = radii
         self.overlaps = overlaps
+        hub = Hub(hub_length, hub_radius)
         vertices = []
         struts = []
         tendons = []
@@ -438,9 +478,8 @@ class PrismTower(Tensegrity):
         twist_sign = -1
         twist = twist_sign * (math.pi / 2 - math.pi / n)
         if strut_lengths:
-
             self.heights = [prism_height(abs(twist) + 2 * math.pi / n, length, [self.radii[i], self.radii[i+1]])
-                       for i, length in enumerate(strut_lengths)]
+                            for i, length in enumerate(strut_lengths)]
         else:
             self.heights = heights
         theta_step = 2 * math.pi / n
@@ -450,22 +489,21 @@ class PrismTower(Tensegrity):
         else:
             bot_z_list = [0]
         for level, radius, height in zip(range(levels), self.radii, self.heights):
-            # first we create vertices and struts, they fit neatly into a layer
+            # First we create vertices and struts, they fit neatly into a layer
             bot_z = bot_z_list[level]
             bot_radius = self.radii[level]
             top_radius = self.radii[level + 1]
-            # top_z = bot_z + self.heights[level]
             top_z = bot_z + height
             bot_vertices = [Vertex(np.array([bot_radius * math.cos(i * theta_step + theta_offset),
                                              bot_radius * math.sin(i * theta_step + theta_offset),
-                                             bot_z]), level=level)
+                                             bot_z]), level=level, hub=hub)
                             for i in range(n)]
             top_vertices = [Vertex(np.array([top_radius * math.cos(i * theta_step - twist + theta_offset),
                                              top_radius * math.sin(i * theta_step - twist + theta_offset),
-                                             top_z]), level=level)
+                                             top_z]), level=level, hub=hub)
                             for i in range(n)]
             vertices.extend(bot_vertices + top_vertices)
-            # always put bot vertex in strut.vertices[0]
+            # Always put bot vertex in strut.vertices[0]
             struts.extend([Strut([v0, v1], level=level) for v0, v1 in
                            zip(bot_vertices, rotate_list(top_vertices, twist_sign))])
             if redundant_tendons:
@@ -649,8 +687,11 @@ if __name__ == '__main__':
         """ For levels = 1 PrismTower creates a Tensegrity that Olof's alglib code can balance 
             For levels > 1 PrismTower creates 'reasonable' structures, but the interlayer overlaps is just a guess
             provided by the user, so multi-level PrismTowers can't be balanced by Olof's alglib code"""
-        tower = PrismTower(n=3, levels=1, strut_lengths=[11.123], radii=[4, 4], heights=[99, 99],
-                           overlaps=[0.26], verbose=True)
+        hub_len = 10
+        finish_strut_len = 17.5 * 25.4 + 2 * hub_len
+        tower = PrismTower(n=3, levels=1, strut_lengths=[finish_strut_len],
+                           radii=[finish_strut_len/2.78, finish_strut_len/2.78], heights=[999, 999],
+                           overlaps=[0.26], hub_length=10, hub_radius=4.25, verbose=True)
         tower.get_forces()
         tower.print_build()
         tower.set_overlap(0)
