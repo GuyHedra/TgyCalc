@@ -44,11 +44,11 @@ class test_plane_projection(unittest.TestCase):
 #         # tendon = blend.add_tendon_mesh(tendon_radius=self.tendon_radius,
 #         #                                tendon_segment_count=self.tendon_segment_count)
 #         # ph.set_tendon_end_points((2,2,2))
-#         # drawn_length = ph.tendons[0].drawn_length
-#         main = ph.tendons[0].main
-#         for tendon in ph.tendons:
-#             for terminal_vertex, end_point_vector in zip(tendon.vertices, tendon.end_point_vectors):
-#                 self.assertTrue(terminal_vertex in terminal_vertex.strut.vertices)
+#         # drawn_length = ph.tendon_list[0].drawn_length
+#         main = ph.tendon_list[0].main
+#         for tendon in ph.tendon_list:
+#             for terminal_vertex, end_point_vector in zip(tendon.vertex_list, tendon.end_point_vectors):
+#                 self.assertTrue(terminal_vertex in terminal_vertex.strut.vertex_list)
 #                 self.assertTrue(terminal_vertex is end_point_vector.points[0])
 #
 #

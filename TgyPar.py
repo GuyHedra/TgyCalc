@@ -17,7 +17,7 @@ def distance(p0, p1):
     return sum([(c0 - c1) ** 2 for c0, c1 in zip(p0, p1)]) ** 0.5
 
 
-def angle(vec0, vec1):
+def angle(vec0, vec1, acute=True, debug=False):
     """ returns the acute angle between two free vectors """
     # if not isinstance(vec0, Point):
     #     raise TypeError('vec0 must be of type Point')
@@ -26,13 +26,18 @@ def angle(vec0, vec1):
     # value = math.acos(dotproduct(vec0, vec1) / (vec0.magnitude * vec1.magnitude))
     p0 = np.array(vec0)
     p1 = np.array(vec1)
+    cross = np.cross(p0, p1)
+    normal = cross / np.linalg.norm(cross)
     # dot = np.dot(p0, p1)
     # norm0 = np.linalg.norm(p0)
     # norm1 = np.linalg.norm(p1)
-    value = math.acos(np.dot(p0, p1) / (np.linalg.norm(p0) * np.linalg.norm(p1)))
+    # value = math.acos(np.dot(p0, p1) / (np.linalg.norm(p0) * np.linalg.norm(p1)))
+    value = math.atan2(np.dot(cross, normal), np.dot(p0, p1))
+    if debug:
+        print('value from angle', value)
     # value = math.acos(dotproduct(vec0, vec1) / (point0.magnitude * vec1.magnitude))
     # if the angle is greater than pi / 2 then it is the obtuse angle, and we want the acute angle
-    if value > math.pi / 2:
+    if acute and value > math.pi / 2:
         value = math.pi - value
     return value
 
@@ -66,7 +71,7 @@ def trilateration(P1, P2, P3, r1, r2, r3):
 def prism_height(strut_theta, strut_length, radii):
     """ Return the height of a prism tensegrity"""
     # Define a triangle whose hypotenuse is the strut, height is the height of the prism and base is the distance
-    # between the strut vertices projection onto the xy plane
+    # between the strut vertex_list projection onto the xy plane
     strut_theta = abs(strut_theta)
     strut_bottom = (radii[0], 0, 0)
     strut_top_on_xy = (radii[1] * math.cos(strut_theta), radii[1] * math.sin(strut_theta), 0)
@@ -75,9 +80,10 @@ def prism_height(strut_theta, strut_length, radii):
 
 
 class Hub:
-    def __init__(self, length, radius):
+    def __init__(self, length, radius, stitch=None):
         self.length = length
         self.radius = radius
+        self.stitch = stitch  # wire allowance for attaching to hub. Includes both ends!
 
 
 class Vertex:
@@ -96,6 +102,43 @@ class Vertex:
 
     def add_tendon(self, tendon):
         self.tendons.append(tendon)
+
+    def tendon_radial_vec(self, tendon, debug=False):
+        strut_vector = np.array(self.strut.position_vec(self.strut.other_vertex_index(self)))
+        tendon_vector = np.array(tendon.position_vec(tendon.other_vertex_index(self)))
+        tendon_strut_component = ((np.dot(tendon_vector, strut_vector) / np.linalg.norm(strut_vector) ** 2)
+                                  * strut_vector)
+        vector = tendon_vector - tendon_strut_component
+        if debug:
+            return vector, strut_vector, tendon_vector, tendon_strut_component
+        else:
+            return vector
+
+    def tendon_radial_angle(self, tendon, debug=True):
+        """ returns the angle between tendon[0] and tendon after projecting both tendon_list onto the plane that
+        passes through this vertex and is perpendicular to strut. This is useful for the design of tendon angles
+        on a hub"""
+        # normal vector to the plane is the strut
+        if tendon is self.tendons[0]:
+            # return 0
+            normal_component = [0, 0, 0]
+            value = 0
+        else:
+            ref_vector = self.tendon_radial_vec(self.tendons[0])
+            vector = self.tendon_radial_vec(tendon)
+            value = angle(ref_vector, vector)
+            # strut_vector = np.array(self.strut.position_vec(self.strut.other_vertex(self)))
+            # ref_tendon_vector = np.array(self.tendon_list[0].position_vec(self))
+            # ref_normal_component = (np.dot(ref_tendon_vector, strut_vector) /
+            #                         np.linalg.norm(strut_vector) ** 2) * strut_vector
+            # ref_vector = ref_tendon_vector - ref_normal_component
+            # tendon_vector = np.array(tendon.position_vec(self))
+            # normal_component = (np.dot(tendon_vector, strut_vector) / np.linalg.norm(strut_vector) ** 2) * strut_vector
+            # vector = tendon_vector - normal_component
+            # # if debug:
+            # #     print('cross ', np.cross(ref_vector, vector), 'dot cross', np.dot())
+            # value = angle(ref_vector, vector, acute=False)
+        return value
 
     @property
     def cyl_coordinates_deg(self):
@@ -209,19 +252,19 @@ class Tensegrity:
         self.debug_points.extend([[coords, color]])
 
     def populate_members(self):
-        """ Populate each vertex's list of tendons and strut (members) """
+        """ Populate each vertex's list of tendon_list and strut (members) """
         for strut in self.struts:
-            for vertex in strut.vertices:
+            for vertex in strut.vertex_list:
                 vertex.set_strut(strut)
         for tendon in self.tendons:
-            for vertex in tendon.vertices:
+            for vertex in tendon.vertex_list:
                 vertex.add_tendon(tendon)
 
     def get_forces(self):
-        struts = [[self.vertices.index(strut.vertices[0]),
-                   self.vertices.index(strut.vertices[1])] for strut in self.struts]
-        tendons = [[self.vertices.index(tendon.vertices[0]),
-                   self.vertices.index(tendon.vertices[1])] for tendon in self.tendons]
+        struts = [[self.vertices.index(strut.vertex_list[0]),
+                   self.vertices.index(strut.vertex_list[1])] for strut in self.struts]
+        tendons = [[self.vertices.index(tendon.vertex_list[0]),
+                    self.vertices.index(tendon.vertex_list[1])] for tendon in self.tendons]
         vertices = [vertex.coords for vertex in self.vertices]
         forces, termination_type = olof.solve_tensegrity_tensions(np.array(struts), np.array(tendons),
                                                                   np.array(vertices), verbose=False)
@@ -231,7 +274,7 @@ class Tensegrity:
         print('termination type', termination_type)
 
     def plot(self, struts=True, tendons=True, lateral_f=False, vertex_f=False, axes=False, debug=False):
-        """ plots tendons and struts using matplotlib """
+        """ plots tendon_list and strut_list using matplotlib """
 
         def plot_cross(size=0.2):
             offset = size / 2
@@ -259,27 +302,74 @@ class Tensegrity:
             ax.set_axis_off()
         if struts:
             for strut in self.struts:
-                x = [vertex.coords[0] for vertex in strut.vertices]
-                y = [vertex.coords[1] for vertex in strut.vertices]
-                z = [vertex.coords[2] for vertex in strut.vertices]
+                x = [vertex.coords[0] for vertex in strut.vertex_list]
+                y = [vertex.coords[1] for vertex in strut.vertex_list]
+                z = [vertex.coords[2] for vertex in strut.vertex_list]
                 ax.plot3D(x, y, z, 'red', linewidth=3)
         if tendons:
             for tendon in self.tendons:
-                x = [vertex.coords[0] for vertex in tendon.vertices]
-                y = [vertex.coords[1] for vertex in tendon.vertices]
-                z = [vertex.coords[2] for vertex in tendon.vertices]
+                x = [vertex.coords[0] for vertex in tendon.vertex_list]
+                y = [vertex.coords[1] for vertex in tendon.vertex_list]
+                z = [vertex.coords[2] for vertex in tendon.vertex_list]
                 ax.plot3D(x, y, z, 'grey', linewidth=1)
         if debug:
-            offset = 0.1
-            for debug_point in self.debug_points:
-                point, color = debug_point
-                ax.plot3D([point[0] - offset, point[0] + offset], [point[1], point[1]], [point[2], point[2]],
-                          color, linewidth=1)
-                ax.plot3D([point[0], point[0]], [point[1] - offset, point[1] + offset], [point[2], point[2]],
-                          color, linewidth=1)
-                ax.plot3D([point[0], point[0]], [point[1], point[1]], [point[2] - offset, point[2] + offset],
-                          color, linewidth=1)
-                # plot_cross()
+            # for vertex in self.vertex_list:
+            strut = self.struts[0]
+            vertex = strut.vertex_list[0]
+            tendon = vertex.tendon_list[0]
+            strut_vector = np.array(strut.position_vec(strut.other_vertex_index(vertex)))
+            # ax.quiver(*vertex.coords, *strut_vector, color='orange', linewidth=3)
+            coords = [val for pair in zip(vertex.coords, strut_vector) for val in pair]
+            x = [vertex.coords[0] for vertex in [vertex.coords, strut_vector]]
+            y = [vertex.coords[1] for vertex in [vertex.coords, strut_vector]]
+            z = [vertex.coords[2] for vertex in [vertex.coords, strut_vector]]
+            # y = [vertex.coords[1] for vertex in tendon.vertex_list]
+            # z = [vertex.coords[2] for vertex in tendon.vertex_list]
+            ax.plot3D(x, y, z, 'orange', linewidth=5)
+                      # *self.strut_list[0].position_vec(self.strut_list[0].vertex_list[1]), 'green', linewidth=3)
+            tendon_vector = np.array(tendon.position_vec(tendon.other_vertex_index(vertex)))
+            # ax.quiver(*vertex.coords, *tendon_vector, color='orange', linewidth=3)
+            tendon_strut_component = ((np.dot(tendon_vector, strut_vector) / np.linalg.norm(strut_vector) ** 2)
+                                      * strut_vector)
+            # ax.quiver(*vertex.coords, *tendon_strut_component, color='green', linewidth=3)
+            tendon_lateral_component = tendon_vector - tendon_strut_component
+            # ax.quiver(*vertex.coords, *tendon_lateral_component, color='blue', linewidth=3)
+
+            for vertex in self.vertices[0:1]:
+                for tendon in vertex.tendon_list[0:1]:
+                    radial_vec, strut_vec, tendon_vec, tendon_strut_component = vertex.tendon_radial_vec(tendon, debug=True)
+                    # ax.quiver(0, 0, 0, 10, 10, 10, 'green', linewidth=2)
+                    # ax.plot3D([vertex.coords[0], vertex.tendon_radial_vec(tendon)[0]],
+                    #           [vertex.coords[1], vertex.tendon_radial_vec(tendon)[1]],
+                    #           [vertex.coords[2], vertex.tendon_radial_vec(tendon)[2]],
+                    #           'blue', linewidth=1)
+                    # ax.plot3D([vertex.coords[0], radial_vec[0]],
+                    #           [vertex.coords[1], radial_vec[1]],
+                    #           [vertex.coords[2], radial_vec[2]],
+                    #           'blue', linewidth=1)
+                    # ax.plot3D([vertex.coords[0], tendon_vec[0]],
+                    #           [vertex.coords[1], tendon_vec[1]],
+                    #           [vertex.coords[2], tendon_vec[2]],
+                    #           'orange', linewidth=1)
+                    # ax.plot3D([vertex.coords[0], tendon_strut_component[0]],
+                    #           [vertex.coords[1], tendon_strut_component[1]],
+                    #           [vertex.coords[2], tendon_strut_component[2]],
+                    #           'yellow', linewidth=1)
+                    # ax.plot3D([vertex.coords[0], strut_vec[0]],
+                    #           [vertex.coords[1], strut_vec[1]],
+                    #           [vertex.coords[2], strut_vec[2]],
+                    #           'orange', linewidth=1)
+
+            # offset = 0.1
+            # for debug_point in self.debug_points:
+            #     point, color = debug_point
+            #     ax.plot3D([point[0] - offset, point[0] + offset], [point[1], point[1]], [point[2], point[2]],
+            #               color, linewidth=1)
+            #     ax.plot3D([point[0], point[0]], [point[1] - offset, point[1] + offset], [point[2], point[2]],
+            #               color, linewidth=1)
+            #     ax.plot3D([point[0], point[0]], [point[1], point[1]], [point[2] - offset, point[2] + offset],
+            #               color, linewidth=1)
+            #     # plot_cross()
         plt.show()
 
     def print_build(self):
@@ -315,11 +405,26 @@ class Tensegrity:
             print(f'{"Tendon": <{label_width}}',
                   f'{tendon.tendon_type: <{label_width}}',
                   f'{tendon.level: <{number_width}}',
-                  # todo the line below incorrectly labels the index for waist tendons that are not at the very top or
+                  # todo the line below incorrectly labels the index for waist tendon_list that are not at the very top or
                   # bottom
                   f'{index % self.n: <{number_width}}',
                   f'{str(round(tendon.curr_length, precision)): <{number_width}}',
                   f'{str(round(tendon.build_length, precision)): <{number_width}}')
+        print(f'{"Element": <{label_width}}',
+              f'{"Level": <{number_width}}',
+              f'{"Index": <{number_width}}',
+              f'{"Tendon Angles": <{number_width}}')
+        for index, vertex in enumerate(self.vertices):
+            t_angles = []
+            for tendon in vertex.tendon_list:
+                # tangle, normal_component = vertex.tendon_radial_angle(tendon)
+                tangle = vertex.tendon_radial_angle(tendon)
+                t_angles.append(round(math.degrees(tangle)))
+            print(f'{"Vertex": <{label_width}}',
+                  f'{vertex.level: <{number_width}}',
+                  f'{index % self.n: <{number_width}}',
+                  f'{t_angles}'
+                  )
 
     def print_cyl(self, vertices=True, struts=True, tendons=True):
         np.set_printoptions(formatter={'float': '{: 10.3f}'.format})
@@ -373,8 +478,8 @@ class Tensegrity:
                   f'{"theta": >{coord_width}}',
                   f'{"z   ": >{coord_width}}')
             for tendon in self.tendons:
-                vertex0 = tendon.vertices[0]
-                vertex1 = tendon.vertices[1]
+                vertex0 = tendon.vertex_list[0]
+                vertex1 = tendon.vertex_list[1]
                 print(f'{"Tendon": <{label_width}}',
                       f'{str(np.array(vertex0.cyl_coordinates_deg)): <{array_3_width}}',
                       f'{str(np.array(vertex1.cyl_coordinates_deg)): <{array_3_width}}',
@@ -399,8 +504,8 @@ class Tensegrity:
                   f'{"theta": >{coord_width}}',
                   f'{"z   ": >{coord_width}}')
             for strut in self.struts:
-                vertex0_cyl = strut.vertices[0].cyl_coordinates_deg
-                vertex1_cyl = strut.vertices[1].cyl_coordinates_deg
+                vertex0_cyl = strut.vertex_list[0].cyl_coordinates_deg
+                vertex1_cyl = strut.vertex_list[1].cyl_coordinates_deg
                 print(f'{"Strut": <{label_width}}',
                       f'{str(np.array(vertex0_cyl)): <{array_3_width}}',
                       f'{str(np.array(vertex1_cyl)): <{array_3_width}}',
@@ -412,9 +517,9 @@ class Tensegrity:
 # class PrismTower(Tensegrity):
 #     def __init__(self, n=3, levels=2, radii=[3, 3], heights=[10, 10], overlaps=0.06, verbose=0):
 #         """ return 3 numpy.arrays that describe a stable tensegrity structure:
-#         vertex coordinates, tendon vertices, strut vertices """
-#         # Assume that the bottom vertices lie on the x,y plane
-#         # bottom vertices are fully described by the input parameters n and radii[0]
+#         vertex coordinates, tendon vertex_list, strut vertex_list """
+#         # Assume that the bottom vertex_list lie on the x,y plane
+#         # bottom vertex_list are fully described by the input parameters n and radii[0]
 #         self.n = n
 #         self.levels = levels
 #         temp0 = [heights[0:i] for i in range(1, len(heights) - 1)]
@@ -428,7 +533,7 @@ class Tensegrity:
 #             top_z = heights[0]
 #             # top_z = bot_z + height
 #             theta_offset = 0
-#             # twist_sign = 1 will make a left-handed twist (right-handed = struts look like right-handed threads)
+#             # twist_sign = 1 will make a left-handed twist (right-handed = strut_list look like right-handed threads)
 #             twist_sign = -1
 #             twist = twist_sign * (math.pi / 2 - math.pi / self.n)
 #             theta_step = 2 * math.pi / self.n
@@ -443,16 +548,16 @@ class Tensegrity:
 #             self.top_tendons = [Tendon([v0, v1]) for v0, v1 in zip(self.top_vertices, rotate_list(self.top_vertices, 1))]
 #             self.vert_tendons = [Tendon([v0, v1]) for v0, v1 in zip(self.bot_vertices, self.top_vertices)]
 #
-#         struts = [Strut([v0, v1]) for v0, v1 in zip(self.bot_vertices, rotate_list(self.top_vertices, twist_sign))]
-#         vertices = self.bot_vertices + self.top_vertices
-#         tendons = self.bot_tendons + self.top_tendons + self.vert_tendons
-#         Tensegrity.__init__(self, vertices, struts, tendons)
+#         strut_list = [Strut([v0, v1]) for v0, v1 in zip(self.bot_vertices, rotate_list(self.top_vertices, twist_sign))]
+#         vertex_list = self.bot_vertices + self.top_vertices
+#         tendon_list = self.bot_tendons + self.top_tendons + self.vert_tendons
+#         Tensegrity.__init__(self, vertex_list, strut_list, tendon_list)
 
 class PrismTower(Tensegrity):
     def __init__(self, n=3, levels=2, radii=[4, 3, 4], heights=[10, 10], strut_lengths=None, overlaps=[0.2],
-                 hub_length=0, hub_radius=0, verbose=0):
+                 hub_length=0, hub_radius=8, verbose=0):
         """ return 3 numpy.arrays that describe a stable tensegrity structure:
-        vertex coordinates, tendon vertices, strut vertices
+        vertex coordinates, tendon vertex_list, strut vertex_list
         if strut_lengths are given, then heights are calculated from the strut_lengths and heights are ignored."""
         if len(radii) < levels + 1:
             raise Exception('the length of radii must be greater than levels + 1')
@@ -474,7 +579,7 @@ class PrismTower(Tensegrity):
         vertices = []
         struts = []
         tendons = []
-        # twist_sign = 1 will make a left-handed twist (right-handed = struts look like right-handed threads)
+        # twist_sign = 1 will make a left-handed twist (right-handed = strut_list look like right-handed threads)
         twist_sign = -1
         twist = twist_sign * (math.pi / 2 - math.pi / n)
         if strut_lengths:
@@ -489,7 +594,7 @@ class PrismTower(Tensegrity):
         else:
             bot_z_list = [0]
         for level, radius, height in zip(range(levels), self.radii, self.heights):
-            # First we create vertices and struts, they fit neatly into a layer
+            # First we create vertex_list and strut_list, they fit neatly into a layer
             bot_z = bot_z_list[level]
             bot_radius = self.radii[level]
             top_radius = self.radii[level + 1]
@@ -503,7 +608,7 @@ class PrismTower(Tensegrity):
                                              top_z]), level=level, hub=hub)
                             for i in range(n)]
             vertices.extend(bot_vertices + top_vertices)
-            # Always put bot vertex in strut.vertices[0]
+            # Always put bot vertex in strut.vertex_list[0]
             struts.extend([Strut([v0, v1], level=level) for v0, v1 in
                            zip(bot_vertices, rotate_list(top_vertices, twist_sign))])
             if redundant_tendons:
@@ -514,18 +619,18 @@ class PrismTower(Tensegrity):
                 tendons.extend([Tendon([v0, v1], level=max(v0.level, v1.level), tendon_type='waist') for v0, v1 in
                                 zip(top_vertices, rotate_list(top_vertices, 1))])
             theta_offset += math.pi / n - twist
-        # Tendons: now let's create the tendons, they can bridge layers
-        # bottom tendons
+        # Tendons: now let's create the tendon_list, they can bridge layers
+        # bottom tendon_list
         if not redundant_tendons:
             vertex_list = [strut.bot_vertex for strut in [strut for strut in struts if strut.level == 0]]
             tendons.extend([Tendon([v0, v1], level=max(v0.level, v1.level), tendon_type='waist') for
                             v0, v1 in zip(vertex_list, rotate_list(vertex_list, 1))])
-            # top tendons
+            # top tendon_list
             vertex_list = [strut.top_vertex for strut in [strut for strut in struts if strut.level == self.levels - 1]]
             tendons.extend([Tendon([v0, v1], level=self.levels, tendon_type='waist') for
                             v0, v1 in zip(vertex_list, rotate_list(vertex_list, 1))])
         for level in range(levels - 1):
-            # mid tendons (waist tendons that are not bottom or top, they connect the top of each layer to bottom of
+            # mid tendon_list (waist tendon_list that are not bottom or top, they connect the top of each layer to bottom of
             # the layer above)
             lower_vertex_list = [strut.top_vertex for strut in [strut for strut in struts if strut.level == level]]
             upper_vertex_list = [strut.bot_vertex for strut in [strut for strut in struts if strut.level == level + 1]]
@@ -533,12 +638,12 @@ class PrismTower(Tensegrity):
                             for v0, v1 in zip(lower_vertex_list, rotate_list(upper_vertex_list, -1))])
             tendons.extend([Tendon([v0, v1], level=max(v0.level, v1.level), tendon_type='waist')
                             for v0, v1 in zip(rotate_list(lower_vertex_list, -1), rotate_list(upper_vertex_list, -1))])
-            # vertical tendons top to top
+            # vertical tendon_list top to top
             lower_vertex_list = [strut.top_vertex for strut in [strut for strut in struts if strut.level == level]]
             upper_vertex_list = [strut.top_vertex for strut in [strut for strut in struts if strut.level == level + 1]]
             tendons.extend([Tendon([v0, v1], level=level, tendon_type='top_top')
                             for v0, v1 in zip(lower_vertex_list, rotate_list(upper_vertex_list, 1))])
-            # vertical tendons bottom to bottom
+            # vertical tendon_list bottom to bottom
             # if level > 1:
             if redundant_tendons:
                 lower_vertex_list = [strut.bot_vertex for strut in [strut for strut in struts if strut.level == level]]
@@ -546,7 +651,7 @@ class PrismTower(Tensegrity):
                                      for strut in [strut for strut in struts if strut.level == level + 1]]
                 tendons.extend([Tendon([v0, v1], level=level, tendon_type='bot_bot')
                                 for v0, v1 in zip(lower_vertex_list, rotate_list(upper_vertex_list, 1))])
-        # vertical tendons bottom to top
+        # vertical tendon_list bottom to top
         lower_vertex_list = [strut.bot_vertex for strut in [strut for strut in struts if strut.level == 0]]
         upper_vertex_list = [strut.top_vertex for strut in [strut for strut in struts if strut.level == 0]]
         tendons.extend([Tendon([v0, v1], level=0, tendon_type='bot_top')
@@ -559,18 +664,18 @@ class PrismTower(Tensegrity):
 
     # def strut_list(self, level=None):
     #     if level:
-    #         return [strut for strut in self.struts if strut.level == level]
+    #         return [strut for strut in self.strut_list if strut.level == level]
     #     else:
-    #         return self.struts
+    #         return self.strut_list
 
     def set_overlap(self, level=0):
-        """ set overlaps such that waist tendons lie on same plane as strut
+        """ set overlaps such that waist tendon_list lie on same plane as strut
         Assumes symmetrical (not bent) tower prism
         level references the lowest of the two interfacing levels """
-        # for strut in self.struts:
+        # for strut in self.strut_list:
         #     print('strut level', strut.level)
         #     if strut.level == level + 1:
-        #         waist_tendons = [tendon for tendon in strut.bot_vertex.tendons if tendon.tendon_type == 'waist']
+        #         waist_tendons = [tendon for tendon in strut.bot_vertex.tendon_list if tendon.tendon_type == 'waist']
         #         waist_vectors = [tendon.position_vec(strut.bot_vertex) for tendon in waist_tendons]
         #         waist_cross = np.cross(np.array(waist_vectors[0]), np.array(waist_vectors[1]))
         #         overlap_cos = (np.dot(waist_cross, np.array(strut.position_vec(strut.bot_vertex))) /
@@ -578,7 +683,7 @@ class PrismTower(Tensegrity):
         #         overlap_angle = math.acos(overlap_cos)
         #         print('overlap angle', math.degrees(overlap_angle))
         for strut in [strut for strut in self.struts if strut.level == level + 1]:
-            waist_tendons = [tendon for tendon in strut.bot_vertex.tendons if tendon.tendon_type == 'waist']
+            waist_tendons = [tendon for tendon in strut.bot_vertex.tendon_list if tendon.tendon_type == 'waist']
             waist_vectors = [tendon.position_vec(strut.bot_vertex) for tendon in waist_tendons]
             waist_cross = np.cross(np.array(waist_vectors[0]), np.array(waist_vectors[1]))
             overlap_cos = (np.dot(waist_cross, np.array(strut.position_vec(strut.bot_vertex))) /
@@ -589,7 +694,7 @@ class PrismTower(Tensegrity):
     def stabilize(self):
         if self.levels == 1:
             pass
-            """ Assumes we start with vertical struts """
+            """ Assumes we start with vertical strut_list """
             # Confirm that there are two intersections b
 
 
@@ -614,7 +719,7 @@ class KitePar(Tensegrity):
         return True in [tendon.loose for tendon in self.tendons]
 
     def stretch_struts(self, max_steps=3):
-        """ lengthen the struts until tendons are completely tight """
+        """ lengthen the strut_list until tendon_list are completely tight """
         d_tol = len_tol / 10
         step_count = 0
         strut_step = 0.2
@@ -622,13 +727,13 @@ class KitePar(Tensegrity):
         # while self.loose and step_count < max_steps:
         while not done and step_count < max_steps:
             for strut in self.struts:
-            # for strut in self.struts[:1]:
+            # for strut in self.strut_list[:1]:
                 vertex = strut.top_vertex  # this is the vertex that is moving
-                tendons = vertex.tendons
+                tendons = vertex.tendon_list
                 #  we use tendon target lengths and strut current lengths to support our algorithmic strategy
-                trial_positions = trilateration(strut.other_vertex(vertex).coords,
-                                                tendons[0].other_vertex(vertex).coords,
-                                                tendons[1].other_vertex(vertex).coords,
+                trial_positions = trilateration(strut.other_vertex_index(vertex).coords,
+                                                tendons[0].other_vertex_index(vertex).coords,
+                                                tendons[1].other_vertex_index(vertex).coords,
                                                 strut.curr_length, tendons[0].targ_length, tendons[1].targ_length
                                                 )
                 vertex.coords = midpoint(trial_positions[0], trial_positions[1])
@@ -641,10 +746,10 @@ class KitePar(Tensegrity):
                 # print('strut.other_vertex(vertex).coords', strut.other_vertex(vertex).coords, strut.length)
                 # self.add_debug_points(vertex.coords, color='green')
                 # print('vertex.coords', vertex.coords)
-                self.add_debug_points(tendons[0].other_vertex(vertex).coords, color='green')
-                # print('tendons[0].other_vertex(vertex).coords', tendons[0].other_vertex(vertex).coords, tendons[0].length)
-                self.add_debug_points(tendons[1].other_vertex(vertex).coords, color='green')
-                # print('tendons[1].other_vertex(vertex).coords', tendons[1].other_vertex(vertex).coords, tendons[1].length)
+                self.add_debug_points(tendons[0].other_vertex_index(vertex).coords, color='green')
+                # print('tendon_list[0].other_vertex(vertex).coords', tendon_list[0].other_vertex(vertex).coords, tendon_list[0].length)
+                self.add_debug_points(tendons[1].other_vertex_index(vertex).coords, color='green')
+                # print('tendon_list[1].other_vertex(vertex).coords', tendon_list[1].other_vertex(vertex).coords, tendon_list[1].length)
             for strut in self.struts:
                 strut.set_targ_length(strut.curr_length + strut_step)
             step_count += 1
@@ -667,7 +772,7 @@ if __name__ == '__main__':
     if kite_par:
         # Note: KitePar() is under construction and not ready for show time!
         kite = KitePar()
-        # for strut in kite.struts:
+        # for strut in kite.strut_list:
         #     strut.set_length(strut.length * 0.9)
         print('loose is', kite.loose)
         kite.print_cyl(vertices=False)
@@ -695,7 +800,7 @@ if __name__ == '__main__':
         tower.get_forces()
         tower.print_build()
         tower.set_overlap(0)
-        tower.plot()
+        tower.plot(struts=False, debug=True)
     if prism_2_tower:
         """ For levels = 1 PrismTower creates a Tensegrity that Olof's alglib code can balance 
             For levels > 1 PrismTower creates 'reasonable' structures, but the interlayer overlaps is just a guess

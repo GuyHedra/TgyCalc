@@ -19,6 +19,14 @@ class PrismRef:
             raise Exception('name', name, 'is not supported')
 
 
+class BoxRef:
+    """ A reference tensegrity with all angles = pi/4 for testing only. Not stable."""
+    top_coords = [[1, 1, 1], [-1, 1, 1], [-1, -1, 1], [1, -1, 1]]
+    bot_coords = [[1, 1, -1], [-1, 1, -1], [-1, -1, -1], [1, -1, -1]]
+    top_vertices = [TP.Vertex(np.array(coords), level=0) for coords in top_coords]
+    bot_vertices = [TP.Vertex(np.array(coords), level=0) for coords in bot_coords]
+
+
 class TestTowerPrism(unittest.TestCase):
     def test_known_values(self):
         """ specify strut length"""

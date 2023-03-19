@@ -10,7 +10,7 @@ def calculate_t3_prism_tensions(alpha):
                       [math.cos(alpha), math.sin(alpha), 1],
                       [math.cos(alpha + 2 * math.pi / 3), math.sin(alpha + 2 * math.pi / 3), 1],
                       [math.cos(alpha + 4 * math.pi / 3), math.sin(alpha + 4 * math.pi / 3), 1]])
-    #these numbers are indicies in the vertices array for the vertices on either end of the member
+    #these numbers are indicies in the vertex_list array for the vertex_list on either end of the member
     compression_members = array([[0, 3],
                                  [1, 4],
                                  [2, 5]])
@@ -28,7 +28,7 @@ def calculate_t3_prism_tensions(alpha):
 
 def calculate_kite_tensions():
     vertices = array([[0, 1], [1, 0], [0, -2], [-1, 0]])
-    #these numbers are indicies in the vertices array for the vertices on either end of the member
+    #these numbers are indicies in the vertex_list array for the vertex_list on either end of the member
     compression_members = array([[2, 0],
                                  [3, 1]])
     tension_members = array([[0, 1],

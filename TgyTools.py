@@ -158,7 +158,7 @@ class Vertex:
 
 
 class Member:
-    """ base class for tendons and strut"""
+    """ base class for tendon_list and strut"""
 
     def __init__(self, vertices):
         self.vertices = vertices
@@ -228,7 +228,7 @@ class Strut(Member):
 
 
 class Tendon(Member):
-    """ Tension member. Exerts a pull force on its vertices equal to elongation * spring constant"""
+    """ Tension member. Exerts a pull force on its vertex_list equal to elongation * spring constant"""
 
     def __init__(self, vertices, spring_constant=1):
         Member.__init__(self, vertices)
@@ -277,7 +277,7 @@ class Tendon(Member):
     def f_vector(self, vertex):
         """ return a vector parallel to the tendon that points away from vertex arg"""
         if vertex is self.vertices[1]:
-            # return vector_scalar_multiply(self.vertices[0] - self.vertices[1], self.spring_f_mag)
+            # return vector_scalar_multiply(self.vertex_list[0] - self.vertex_list[1], self.spring_f_mag)
             return vector_scalar_multiply(normalize(self.vertices[0] - self.vertices[1]), self.spring_f_mag)
         elif vertex is self.vertices[0]:
             return vector_scalar_multiply(normalize(self.vertices[1] - self.vertices[0]), self.spring_f_mag)
@@ -312,10 +312,10 @@ class Tensegrity:
                 print('****** Warning! xalglib_forces == None ******')
 
     def populate_members(self):
-        """ Populate each vertex's list of tendons and strut (members) and store xalglib forces in each member"""
+        """ Populate each vertex's list of tendon_list and strut (members) and store xalglib forces in each member"""
         self.set_xalglib_forces()
         for member in self.members:
-            for vertex in member.vertices:
+            for vertex in member.vertex_list:
                 if isinstance(member, Tendon):
                     vertex.add_tendon(member)
                 elif isinstance(member, Strut):
@@ -518,10 +518,10 @@ class Tensegrity:
                 print('* Member unit vectors from simpleTools')
                 for member in self.members:
                     print(f'{member.member_type: <{type_width}}',
-                          f'{str(np.around(np.array(member.vertices[0].coordinates), precision)): <{vector_width}}',
-                          f'{str(np.around(np.array(member.vertices[1].coordinates), precision)): <{vector_width}}',
-                          # f'{str(np.around(np.array(member.unit_force_vector(member.vertices[0])), round_param)): <{vector_width}}',
-                          # f'{str(np.around(np.array(member.unit_force_vector(member.vertices[0])), round_param)): <{vector_width}}'
+                          f'{str(np.around(np.array(member.vertex_list[0].coordinates), precision)): <{vector_width}}',
+                          f'{str(np.around(np.array(member.vertex_list[1].coordinates), precision)): <{vector_width}}',
+                          # f'{str(np.around(np.array(member.unit_force_vector(member.vertex_list[0])), round_param)): <{vector_width}}',
+                          # f'{str(np.around(np.array(member.unit_force_vector(member.vertex_list[0])), round_param)): <{vector_width}}'
                           )
 
     def solver(self, err_tol=0.01, initial_step=0.005, max_step_count=1000, verbose=False):
@@ -625,7 +625,7 @@ class Tensegrity:
             print('>> solver used ', step_count, ' steps')
 
     def plot(self, struts=True, tendons=True, lateral_f=False, vertex_f=False):
-        """ plots tendons and struts using matplotlib """
+        """ plots tendon_list and strut_list using matplotlib """
         # fig = plt.figure()
         ax = plt.axes(projection='3d')
         ax.set_xlim(-5, 5)
@@ -748,17 +748,17 @@ class Prism(Tensegrity):
     def balance_forces(self, verbose=0, debug=True):
         """ Assumes a known good symmetrical prism.
         Methodology:
-        1. Assign an arbitrary force equally to bottom waist tendons
-        2. Find the vertical tendon force that will balance the waist tendons in the plane orthogonal to the strut and
+        1. Assign an arbitrary force equally to bottom waist tendon_list
+        2. Find the vertical tendon force that will balance the waist tendon_list in the plane orthogonal to the strut and
         containing the vertex
         3. Find the top waist forces that will balance the vertical tendon forces in the top orthogonal planes
         4. Check for equilibrium
         """
-        # 1. Assign an arbitrary force equally to bottom waist tendons
+        # 1. Assign an arbitrary force equally to bottom waist tendon_list
         bot_t_force = 10
         for tendon in self.bot_tendons:
             tendon.set_force(bot_t_force)
-        # 2. Find the vertical tendon force that will balance the waist tendons in the plane orthogonal to the strut and
+        # 2. Find the vertical tendon force that will balance the waist tendon_list in the plane orthogonal to the strut and
         # containing the vertex
         for vertex in self.bot_vertices:
             waist_lateral_f_vecs = []
@@ -798,10 +798,10 @@ class Prism(Tensegrity):
                 # print('waist_lateral_f_vecs[0] mag', vector_mag(waist_lateral_f_vecs[0]))
                 # print('waist_lateral_f_vecs[1] mag', vector_mag(waist_lateral_f_vecs[1]))
                 # waist_sum = vector_add(*[tendon.lateral_f_vec(vertex) for
-                #                          tendon in vertex.tendons if tendon in self.bot_tendons])
+                #                          tendon in vertex.tendon_list if tendon in self.bot_tendons])
                 # print('lateral vec sum', vector_add(vertical_tendon.lateral_f_vec(vertex), waist_sum))
             if verbose > 1:
-                print('bot vertices f_vector', vertex.f_vector, 'cross with strut axis',
+                print('bot vertex_list f_vector', vertex.f_vector, 'cross with strut axis',
                       cross_product(vertex.f_vector, vertex.strut.axis_vector(vertex)))
         # 3. Find the top waist forces that will balance the vertical tendon forces in the top orthogonal planes
         for vertex in self.top_vertices:
@@ -816,14 +816,14 @@ class Prism(Tensegrity):
                     theta = vec_angle(tendon.axis_vector(vertex), vertex.strut.axis_vector(vertex))
                     tendon.set_force(waist_lat_f_mag / math.sin(theta))
             if verbose > 1:
-                print('top vertices f_vector', vertex.f_vector, 'cross with strut axis',
+                print('top vertex_list f_vector', vertex.f_vector, 'cross with strut axis',
                       cross_product(vertex.f_vector, vertex.strut.axis_vector(vertex)))
         # 4. Check for equilibrium
         if verbose > 1:
             print('equilibrium is', self.equilibrium(0.5))
 
     # def solver_strut_twister(self):
-    #     """ attempts to reach equilibrium by changing position of the top of the struts. Keeps all radial symmetries"""
+    #     """ attempts to reach equilibrium by changing position of the top of the strut_list. Keeps all radial symmetries"""
     #     # todo: take into account the fact that err_tol is Newtons and step size is in radians
     #     # perhaps use feedback loop to modify step size in order to get the desired Newton step size?
     #     err_tol = 0.1
@@ -836,18 +836,18 @@ class Prism(Tensegrity):
     #     # i_step_size = 0
     #     step_count = 0
     #     while not self.equilibrium(err_tol=err_tol):
-    #         # modify phi (spherical polar angle) of top vertex in all struts equally
-    #         for strut in self.struts:
+    #         # modify phi (spherical polar angle) of top vertex in all strut_list equally
+    #         for strut in self.strut_list:
     #             # strut.modify_phi(phi_direction * step_sizes[i_step_size])
-    #             initial_strut_force_mag = self.struts[0].spring_force_magnitude
+    #             initial_strut_force_mag = self.strut_list[0].spring_force_magnitude
     #             strut.modify_phi(phi_direction * step_size)
-    #             if self.struts[0].spring_force_magnitude > initial_strut_force_mag:
+    #             if self.strut_list[0].spring_force_magnitude > initial_strut_force_mag:
     #                 # if we are going the wrong way then reverse direction
     #                 phi_direction = -phi_direction
     #                 # phi_better = False
-    #             elif self.struts[0].spring_force_magnitude == initial_strut_force_mag:
+    #             elif self.strut_list[0].spring_force_magnitude == initial_strut_force_mag:
     #                 raise Exception('no change in spring force found after change in phi')
-    #             initial_strut_force_mag = self.struts[0].spring_force_magnitude
+    #             initial_strut_force_mag = self.strut_list[0].spring_force_magnitude
     #             strut.modify_theta(theta_direction * step_size)
     #
     #             # else:
@@ -855,7 +855,7 @@ class Prism(Tensegrity):
     #         step_count += 1
     #         if step_count > max_steps:
     #             raise Exception('max step count exceeded')
-    #         # modify theta (spherical azimuthal angle) of top vertex in all struts equally
+    #         # modify theta (spherical azimuthal angle) of top vertex in all strut_list equally
 
 
 class PrismNeq3(Tensegrity):
@@ -869,7 +869,7 @@ class PrismNeq3(Tensegrity):
                             [math.cos(alpha), math.sin(alpha), 1],
                             [math.cos(alpha + 2 * math.pi / 3), math.sin(alpha + 2 * math.pi / 3), 1],
                             [math.cos(alpha + 4 * math.pi / 3), math.sin(alpha + 4 * math.pi / 3), 1]]
-        # these numbers are indices in the vertices array for the vertices on either end of the member
+        # these numbers are indices in the vertex_list array for the vertex_list on either end of the member
         self.strut_vertices = [[0, 3],
                                [1, 4],
                                [2, 5]]

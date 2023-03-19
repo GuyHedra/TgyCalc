@@ -17,8 +17,8 @@ class Solver(unittest.TestCase):
         if verbosity > 0:
             print('>>>Pushing strut 0 by 1 in x')
         displacement = [1, 0, 0]
-        kite.struts[0].vertices[0].set_coordinates(TT.vector_add(kite.struts[0].vertices[0].coordinates, displacement))
-        kite.struts[0].vertices[1].set_coordinates(TT.vector_add(kite.struts[0].vertices[1].coordinates, displacement))
+        kite.struts[0].vertex_list[0].set_coordinates(TT.vector_add(kite.struts[0].vertex_list[0].coordinates, displacement))
+        kite.struts[0].vertex_list[1].set_coordinates(TT.vector_add(kite.struts[0].vertex_list[1].coordinates, displacement))
         kite.print_spring_forces(err_tol=err_tol, verbosity=verbosity)
         kite.solver()
         kite.print_spring_forces(err_tol=err_tol, verbosity=verbosity)
@@ -51,7 +51,7 @@ class Solver(unittest.TestCase):
             tensegrity.solver(err_tol=err_tol, max_step_count=1000, initial_step=err_tol / 10, verbose=False)
             tensegrity.print_spring_forces(err_tol=err_tol, verbosity=verbosity)
             self.assertTrue(tensegrity.equilibrium(err_tol=err_tol))
-        # move the anchor vertices apart in the y direction
+        # move the anchor vertex_list apart in the y direction
         if 2 in run_cases:
             verbosity = 0
             # verbosity = 2
@@ -94,7 +94,7 @@ class Solver(unittest.TestCase):
             #     print('algblib ', o1.solve_tensegrity_tensions(array(tensegrity.strut_array),
             #                                                    array(tensegrity.tendon_array),
             #                                                    array(tensegrity.vertex_array)))
-            # set waist tendon spring constants to .1 of vertical tendons spring constants
+            # set waist tendon spring constants to .1 of vertical tendon_list spring constants
             for tendon in tensegrity.tendons[0:6]:
                 tendon.set_spring_constant(0.1)
             tensegrity.set_nom_tendon_lengths(0.5)

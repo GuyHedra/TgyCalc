@@ -66,12 +66,12 @@ class TgyTools(unittest.TestCase):
     #     tendon_vertices = [[0, 2], [1, 3]]
     #     nom_tendon_lengths = 0.5
     #     tensegrity = TT.TArbitrary(coordinates, strut_vertices, tendon_vertices, nom_tendon_lengths)
-    #     vertex0 = tensegrity.vertices[0]
-    #     vertex1 = tensegrity.vertices[1]
-    #     tensegrity.tendons[0].set_force(1)
-    #     tensegrity.tendons[1].set_force(1)
-    #     assert_almost_equal(np.array(tensegrity.tendons[0].lateral_f_vec(vertex0)), np.array([1, 0, 0]))
-    #     assert_almost_equal(np.array(tensegrity.tendons[1].lateral_f_vec(vertex1)), np.array([2 ** 0.5 / 2, 0, 0]))
+    #     vertex0 = tensegrity.vertex_list[0]
+    #     vertex1 = tensegrity.vertex_list[1]
+    #     tensegrity.tendon_list[0].set_force(1)
+    #     tensegrity.tendon_list[1].set_force(1)
+    #     assert_almost_equal(np.array(tensegrity.tendon_list[0].lateral_f_vec(vertex0)), np.array([1, 0, 0]))
+    #     assert_almost_equal(np.array(tensegrity.tendon_list[1].lateral_f_vec(vertex1)), np.array([2 ** 0.5 / 2, 0, 0]))
 
     # def test_balance_forces(self):
     #     tgy = TT.Prism(n=3)

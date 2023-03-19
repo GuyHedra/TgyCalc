@@ -3,7 +3,7 @@ from numpy import concatenate, shape, array, transpose, linalg, zeros, ones, ful
 # from xalglib import xalglib
 import TgyTools as sT
 
-""" demonstrate a method of adding the forces on a tensegrity structures vertices"""
+""" demonstrate a method of adding the forces on a tensegrity structures vertex_list"""
 
 
 if __name__ == '__main__':
@@ -29,7 +29,7 @@ if __name__ == '__main__':
     # print('\n*** twisted pinned kite forces ***')
     # print('theta = ', theta)
     # kite.set_strut_theta(theta)
-    print('*** modifying kite vertices such that it will be out of equilibrium')
+    print('*** modifying kite vertex_list such that it will be out of equilibrium')
     kite.vertices[0].coordinates = [2, 0, 0]
     kite.print_spring_forces()
     print('*** updating xalglib forces')
