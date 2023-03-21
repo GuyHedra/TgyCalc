@@ -104,11 +104,18 @@ class Tensegrity:
         print('a', a)
         # print('a[2]', a[2])
         print('b', b)
+        """ Solve the force matrix"""
         x = np.linalg.solve(a, b)
         # x = np.linalg.lstsq(a, b)
         print('x', x)
-        """ Solve the force matrix"""
-
+        print('x[1]', x[1])
+        print('self.f_unit_vectors[0][1:]', self.f_unit_vectors[0][1:])
+        total_tendon_forces = 0
+        for f_unit_vector, tendon_force in zip(self.f_unit_vectors[0][1:], x[1:]):
+            strut_tendon_dot = np.dot(f_unit_vector, self.f_unit_vectors[0][0])
+            # print('strut_tendon_dot', strut_tendon_dot, 'tendon_force', tendon_force)
+            total_tendon_forces += strut_tendon_dot * tendon_force
+        print('total_tendon_forces', total_tendon_forces)
 
 if __name__ == '__main__':
     # mode = 'kite'
