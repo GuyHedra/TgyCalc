@@ -31,17 +31,17 @@ def prism_n3(alpha=5 * math.pi / 6):
                       [math.cos(alpha + 4 * math.pi / 3), math.sin(alpha + 4 * math.pi / 3), 1]])
     #these numbers are indicies in the vertex_list array for the vertex_list on either end of the member
     compression_members = np.array([[0, 3],
-                                 [1, 4],
-                                 [2, 5]])
+                                    [1, 4],
+                                    [2, 5]])
     tension_members = np.array([[0, 1],
-                             [1, 2],
-                             [2, 0],
-                             [3, 4],
-                             [4, 5],
-                             [5, 3],
-                             [1, 3],
-                             [2, 4],
-                             [0, 5]])
+                                [1, 2],
+                                [2, 0],
+                                [3, 4],
+                                [4, 5],
+                                [5, 3],
+                                [1, 3],
+                                [2, 4],
+                                [0, 5]])
     return vertices, compression_members, tension_members
 
 
@@ -57,11 +57,12 @@ def prism1(n=3, hr_ratio=1, twist=math.pi / 2 - math.pi / 3, verbose=False):
                           radius * math.sin(i * theta_step + twist), h] for i in range(3)])
     vertices = np.array(vertices)
     # struts
-    struts = [[v0, v1] for v0, v1 in zip(range(n), tp.rotate_list(list(range(n, 2*n)), -1))]
+    # struts = [[v0, v1] for v0, v1 in zip(range(n), tp.rotate_list(list(range(n, 2*n)), -1))]
+    struts = [[v0, v1] for v0, v1 in zip(range(n), np.roll(list(range(n, 2*n)), -1))]
     # bottom waist tendons
-    tendons = [[v0, v1] for v0, v1 in zip(range(n), tp.rotate_list(list(range(n)), 1))]
+    tendons = [[v0, v1] for v0, v1 in zip(range(n), np.roll(list(range(n)), 1))]
     # top waist tendons
-    tendons.extend([[v0, v1] for v0, v1 in zip(range(n, 2*n), tp.rotate_list(list(range(n, 2*n)), 1))])
+    tendons.extend([[v0, v1] for v0, v1 in zip(range(n, 2*n), np.roll(list(range(n, 2*n)), 1))])
     # vertical tendons
     tendons.extend([[v0, v1] for v0, v1 in zip(range(n), range(n, 2*n))])
     if verbose:
@@ -211,8 +212,27 @@ class Tensegrity:
 
         plt.show()
 
-def plot_prism_stability_space():
-    pass
+
+def plot_prism1_stability_space(n=3):
+    def waist_force_difference(hr_ratio, twist):
+        t_forces = Tensegrity(*prism1(n=3, hr_ratio=hr_ratio, twist=twist), name='prism').tendon_forces(verbose=False)
+        return t_forces[0][0] - t_forces[1][0]
+    twist_values = np.linspace(math.pi * (1/2 - 1/n - 1/4), math.pi * (1/2 - 1/n + 1/4), 11)
+    hr_ratio_values = np.linspace(0.5, 3, 10)
+    z_list = []
+    for twist_value in twist_values:
+        z_list.extend([waist_force_difference(hr_ratio=hr_ratio_value, twist=twist_value)
+                       for hr_ratio_value in hr_ratio_values])
+    twist_degrees = [math.degrees(twist_radians) for twist_radians in twist_values]
+    x, y = np.meshgrid(hr_ratio_values, twist_degrees)
+    z = np.array(z_list).reshape(x.shape)
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot_wireframe(x, y, z)
+    ax.set_xlabel('height:radius ratio')
+    ax.set_ylabel('twist (degrees)')
+    ax.set_zlabel('waist tendon difference')
+    plt.show()
 
 
 def stabilize_prism():
@@ -230,6 +250,7 @@ def stabilize_prism():
     # step_count = 0
     # while error > err_tol and step_count < max_steps :
 
+
 if __name__ == '__main__':
     # mode = 'kite'
     # mode = 'prism1'  # builds single level prism using n, hr_ratio and twist
@@ -242,17 +263,20 @@ if __name__ == '__main__':
         thing = Tensegrity(*kite(), mode)
         thing.tendon_forces()
     elif mode == 'prism1 sweep':
-        # thing = Prism1(n=3, hr_ratio=1, twist=math.pi / 2 - math.pi / 3)
-        n = 3
-        for twist in (math.pi / 2 - math.pi / n) * np.array([0.9, 1, 1.1]):
-            thing = Tensegrity(*prism1(n=3, hr_ratio=2, twist=twist), name='prism')
-            thing.tendon_forces(verbose=False)
-
-        # thing.plot()
+        plot_prism1_stability_space(n=3)
+        # # thing = Prism1(n=3, hr_ratio=1, twist=math.pi / 2 - math.pi / 3)
+        # n = 3
+        # for twist in (math.pi / 2 - math.pi / n) * np.array([0.9, 1, 1.1]):
+        #     for hr_ratio in [1, 2, 3]:
+        #         thing = Tensegrity(*prism1(n=3, hr_ratio=hr_ratio, twist=twist), name='prism')
+        #         t_forces = thing.tendon_forces(verbose=False)
+        #         # print('t_forces', t_forces)
+        #         print('hr_ratio', hr_ratio, 'waist force difference', t_forces[0][0] - t_forces[1][0])
+        # # thing.plot()
     elif mode == 'prism1':
         # thing = Prism1(n=3, hr_ratio=1, twist=math.pi / 2 - math.pi / 3)
         thing = Tensegrity(*prism1(n=3, hr_ratio=2, twist=math.pi / 2 - math.pi / 3), name='prism')
-        # thing.plot()
+        thing.plot()
         thing.tendon_forces(verbose=True)
     elif mode == 'prism':
         thing = Tensegrity(*prism_n3(), mode)
