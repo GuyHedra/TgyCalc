@@ -54,7 +54,7 @@ def prism1(n=3, hr_ratio=1, twist=math.pi / 2 - math.pi / 3, verbose=False):
     theta_step = (2 * math.pi) / n
     for h, twist in zip([0, h], [0, twist]):
         vertices.extend([[radius * math.cos(i * theta_step + twist),
-                          radius * math.sin(i * theta_step + twist), h] for i in range(3)])
+                          radius * math.sin(i * theta_step + twist), h] for i in range(n)])
     vertices = np.array(vertices)
     # struts
     # struts = [[v0, v1] for v0, v1 in zip(range(n), tp.rotate_list(list(range(n, 2*n)), -1))]
@@ -215,10 +215,11 @@ class Tensegrity:
 
 def plot_prism1_stability_space(n=3):
     def waist_force_difference(hr_ratio, twist):
-        t_forces = Tensegrity(*prism1(n=3, hr_ratio=hr_ratio, twist=twist), name='prism').tendon_forces(verbose=False)
+        t_forces = Tensegrity(*prism1(n=n, hr_ratio=hr_ratio, twist=twist), name='prism').tendon_forces(verbose=False)
         return t_forces[0][0] - t_forces[1][0]
-    twist_values = np.linspace(math.pi * (1/2 - 1/n - 1/4), math.pi * (1/2 - 1/n + 1/4), 11)
-    hr_ratio_values = np.linspace(0.5, 3, 10)
+    # twist_values = np.linspace(math.pi * (1/2 - 1/n - 1/4), math.pi * (1/2 - 1/n + 1/4), 11)
+    twist_values = np.linspace(math.pi * (1/2 - 1/n - 1/10), math.pi * (1/2 - 1/n + 1/10), 21)
+    hr_ratio_values = np.linspace(0.5, 3, 20)
     z_list = []
     for twist_value in twist_values:
         z_list.extend([waist_force_difference(hr_ratio=hr_ratio_value, twist=twist_value)
@@ -235,26 +236,51 @@ def plot_prism1_stability_space(n=3):
     plt.show()
 
 
-def stabilize_prism():
+def stabilize_prism1(n=3, verbose=False):
     """ Practice function stabilizes a prism by searching for a twist (alpha) angle that stabilizes the prism """
-    pass
-    # max_step = math.pi/10
-    # min_step = math.pi/1000
-    # max_steps = 1e4
-    # err_tol = 1e-3
-    # step = 10 * min_step
-    # initial_alpha = 5 * math.pi / 6 + 1
-    # prism = Tensegrity(*prism(alpha=5 * math.pi / 6 + 1), name='prism')
-    # forces = prism.tendon_forces()
-    # error = forces[0][0] - forces[1][0]
-    # step_count = 0
-    # while error > err_tol and step_count < max_steps :
+    min_step_size = math.pi/1000
+    max_step_count = 10
+    err_tol = 1e-5
+    initial_step_size = 10 * min_step_size
+    initial_twist = math.pi * (1 / 2 - 1 / n + 1/3)
+    prism = Tensegrity(*prism1(n=n, twist=initial_twist), name='prism')
+    t_forces = prism.tendon_forces()
+    error = t_forces[0][0] - t_forces[1][0]
+    error_history = [error]
+    step_count = 0
+    step_direction = 1
+    step = initial_step_size * step_direction
+    step_history = [step]
+    twist = initial_twist + step
+    slope_history = []
+    while abs(error) > err_tol and step_count < max_step_count:
+        t_forces = Tensegrity(*prism1(n=n, hr_ratio=1, twist=twist), name='prism').tendon_forces(verbose=False)
+        error = t_forces[0][0] - t_forces[1][0]
+        slope = (error_history[-1] - error) / step
+        slope_history.append(slope)
+        error_history.append(error)
+        step = error / slope
+        step_history.append(step)
+        twist = twist + step
+        step_count += 1
+    if verbose:
+        print('error history', error_history)
+        print('step history', step_history)
+        print('slope_history', slope_history)
+        print('step_count', step_count)
+        if abs(error) < err_tol:
+            print('*** Stabilization Successful ***')
+        else:
+            print('*** Stabilization Failed ***')
+        print('twist', math.degrees(twist), '\nwaist tendon force error', error)
+    return twist
 
 
 if __name__ == '__main__':
     # mode = 'kite'
     # mode = 'prism1'  # builds single level prism using n, hr_ratio and twist
-    mode = 'prism1 sweep'  # sweep twist and hr ratio, plot difference in waist tendon forces
+    mode = 'stabilize prism1'
+    # mode = 'prism1 stability sweep'  # sweep twist and hr ratio, plot difference in waist tendon forces
     # mode = 'prism'
     # mode = 'unstable prism'
     # mode = 'tp prism'
@@ -262,8 +288,10 @@ if __name__ == '__main__':
     if mode == 'kite':
         thing = Tensegrity(*kite(), mode)
         thing.tendon_forces()
-    elif mode == 'prism1 sweep':
-        plot_prism1_stability_space(n=3)
+    elif mode == 'stabilize prism1':
+        stabilize_prism1(n=3, verbose=True)
+    elif mode == 'prism1 stability sweep':
+        plot_prism1_stability_space(n=4)
         # # thing = Prism1(n=3, hr_ratio=1, twist=math.pi / 2 - math.pi / 3)
         # n = 3
         # for twist in (math.pi / 2 - math.pi / n) * np.array([0.9, 1, 1.1]):
@@ -275,7 +303,9 @@ if __name__ == '__main__':
         # # thing.plot()
     elif mode == 'prism1':
         # thing = Prism1(n=3, hr_ratio=1, twist=math.pi / 2 - math.pi / 3)
-        thing = Tensegrity(*prism1(n=3, hr_ratio=2, twist=math.pi / 2 - math.pi / 3), name='prism')
+        # thing = Tensegrity(*prism1(n=3, hr_ratio=2, twist=math.pi / 2 - math.pi / 3), name='prism')
+        strut_count = 6
+        thing = Tensegrity(*prism1(n=strut_count, hr_ratio=2, twist=math.pi / 2 - math.pi / strut_count), name='prism')
         thing.plot()
         thing.tendon_forces(verbose=True)
     elif mode == 'prism':
