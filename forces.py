@@ -72,8 +72,8 @@ def prism1(n=3, hr_ratio=1, twist=math.pi / 2 - math.pi / 3, verbose=False):
     return vertices, struts, tendons
 
 
-def prism_tower(n=3, levels=2, hr_ratio=[1, 1], level_twist=[math.pi*(1/2-1/3), math.pi*(1/2-1/3)],
-                interface_twist=[math.pi*(1/2-1/3)/2], interface_overlap=[0.1]):
+def prism_tower(n=3, levels=2, hr_ratio=[2, 2], level_twist=[math.pi*(1/2-1/3), math.pi*(1/2-1/3)],
+                interface_twist=[math.pi/3], interface_overlap=[0.1], verbose=False):
     """ Returns an numpy array of vertex coordinates, a list of struts and a list of tendons
         len(hr_ratio) and len(level_twist) must both equal levels
         len(interface_twist) must equal levels - 1
@@ -92,13 +92,14 @@ def prism_tower(n=3, levels=2, hr_ratio=[1, 1], level_twist=[math.pi*(1/2-1/3), 
     if levels > 1:
         # todo put for loop below into two comprehensions
         for level in range(1, levels):
-            bottom_theta = theta_start_array[level - 1][1] - interface_twist[level - 1]
+            # bottom_theta = theta_start_array[level - 1][1] - interface_twist[level - 1]
+            bottom_theta = theta_start_array[level - 1][1] + interface_twist[level - 1]
             top_theta = bottom_theta + level_twist[level]
             theta_start_array.extend([[bottom_theta, top_theta]])
             bottom_z = z_array[level - 1][1] - interface_overlap[level - 1]
             top_z = bottom_z + h[level]
             z_array.extend([[bottom_z, top_z]])
-    # Build theta
+    # Build theta array
     theta_step = 2 * math.pi / n
     theta_array = []
     for level in range(levels):
@@ -107,46 +108,59 @@ def prism_tower(n=3, levels=2, hr_ratio=[1, 1], level_twist=[math.pi*(1/2-1/3), 
     # for level in range(levels):
         # for layer in [0, 1]:
     # vertices.shape is (level, layer, i, xyz)
-    vertices = np.array([[[[math.cos(theta_array[level][layer][i]), math.sin(theta_array[level][layer][i]),
+    vertices = np.array([[[[radius[level]*math.cos(theta_array[level][layer][i]),
+                            radius[level]*math.sin(theta_array[level][layer][i]),
                             z_array[level][layer]] for i in range(n)] for layer in [0, 1]] for level in range(levels)])
-
-        # vertices[level] = [[[math.cos(theta_array[level][layer][i]),
-        #                      math.sin(theta_array[level][layer][i]),
-        #                      z_array[level][layer]] for i in range(n)] for layer in [0, 1]]
-
-            # vertices[level, layer] = [[math.cos(theta_array[level][layer][i]),
-            #                            math.sin(theta_array[level][layer][i]),
-            #                            z_array[level][layer]] for i in range(n)]
-
-            # for i in range(n):
-            #     vertices[level, layer, i] = [math.cos(theta_array[level][layer][i]),
-            #                                  math.sin(theta_array[level][layer][i]),
-            #                                  z_array[level][layer]]
-    # for level in range(levels):
-    #     vertices.extend([[
-    #         math.cos(theta_array[level][layer][i]), math.sin(theta_array[level][layer][i]), z_array[level][layer]]
-    #         for i in range(n)
-    #         for layer in [0, 1]])
-    print('vertices', vertices)
+    """ Some vertices index offsets:
+    1:e vertex in layer=0 (bottom layer) of level: 2 * level * n
+    1:e vertex in layer=1 (top layer) of level: 2 * level * n + n
+    1: vertex in layer=1 (top layer) of top level: 2 * levels * n - n
+    """
     # struts
-    struts = np.empty([levels, n, 2])  # shape = (levels, n, layers)
+    struts = np.empty([levels, n, 2], dtype=int)  # shape = (levels, n, layers)
     for level in range(levels):
-        struts[level] = [[v0, v1] for v0, v1 in zip(range(level * 2 * n, level * 2 * n + n),
-                                                    range(level * 2 * n + n, level * 2 * n + 2 * n))]
-    print('struts', struts)
-
-
-    #     # bottom waist tendons
-    #     tendons = [[v0, v1] for v0, v1 in zip(range(n), np.roll(list(range(n)), 1))]
-    #     # top waist tendons
-    #     tendons.extend([[v0, v1] for v0, v1 in zip(range(n, 2 * n), np.roll(list(range(n, 2 * n)), 1))])
+        struts[level] = [[v0, v1] for v0, v1 in zip(range(2 * level * n, 2 * level * n + n),
+                                                    range(2 * level * n + n, 2 * level * n + 2 * n))]
+    vertical_tendons = np.empty([levels, n, 2])
+    cap_waist_tendons = np.empty([2, n, 2], dtype=int)  # shape = (len[top, bottom], n, len[v0, v1])
+    # cap_waist_tendons
+    # bottom cap waist tendons
+    cap_waist_tendons[0] = [[v0, v1] for v0, v1 in zip(range(n), np.roll(list(range(n)), 1))]
+    # top cap waist tendons
+    cap_waist_tendons[1] = [[v0, v1] for v0, v1 in
+                            zip(range(2 * levels * n - n, 2 * levels * n),
+                                np.roll(list(range(2 * levels * n - n, 2 * levels * n)), 1))]
+    interface_waist_tendons = np.empty([levels - 1, 2 * n, 2], dtype=int)
+    for interface_layer in range(levels-1):
+        # interface_layer points to the level below the interface
+        # we will create the interface tendons in two steps, first lower level to upper level
+        # create list of lower level and list of upper level vertices
+        upper_vertices = np.array([v for v in range(2 * interface_layer * n + n, 2 * interface_layer * n + 2 * n)],
+                                  dtype=int)
+        lower_vertices = np.array([v for v in range(2 * (interface_layer + 1) * n, 2 * (interface_layer + 1) * n + n)],
+                                  dtype=int)
+        interleaved_vertices = np.empty(upper_vertices.size + lower_vertices.size, dtype=int)
+        # interleaved_vertices[0::2] = np.roll(upper_vertices, 1)
+        interleaved_vertices[0::2] = upper_vertices
+        interleaved_vertices[1::2] = lower_vertices
+        print('interleaved_vertices', interleaved_vertices)
+        interface_waist_tendons[interface_layer] = [[v0, v1] for v0, v1 in
+                                                    zip(interleaved_vertices, np.roll(interleaved_vertices, 1))]
+    print('interface_waist_tendons', interface_waist_tendons)
     #     # vertical tendons
     #     tendons.extend([[v0, v1] for v0, v1 in zip(range(n), range(n, 2 * n))])
-    #     print('vertices', vertices)
-    #     print('struts', struts)
-    #     print('tendons', tendons)
-
-    return vertices, struts, tendons
+    cap_waist_list = cap_waist_tendons.reshape(-1, 2)
+    interface_waist_list = interface_waist_tendons.reshape(-1, 2)
+    # tendons = np.concatenate(cap_waist_list, interface_waist_list, axis=0)
+    tendons = np.concatenate((cap_waist_list, interface_waist_list), axis=0)
+    if verbose:
+        # print('vertices', vertices)
+        # print('struts', struts)
+        print('tendons', tendons)
+        vertex_list = vertices.reshape(-1, 3)
+        strut_list = struts.reshape(-1, 2)
+        tendon_list = tendons.reshape(-1, 2)
+    return vertex_list, strut_list, tendon_list
 
 
 
@@ -185,6 +199,10 @@ class Tensegrity:
             for i, vertex_index in enumerate(strut):
                 if vertex_index in self.f_unit_vectors:
                     raise Exception('multiple struts are associated with vertex', vertex_index)
+                # debug
+                v0 = self.vertices[vertex_index]
+                v1 = self.vertices[strut[(i + 1) % 2]]
+                vec = v0 - v1
                 vector = self.vertices[vertex_index] - self.vertices[strut[(i + 1) % 2]]
                 self.f_unit_vectors[vertex_index] = [vector / np.linalg.norm(vector)]
         # print(self.f_unit_vectors)
@@ -369,7 +387,8 @@ if __name__ == '__main__':
         thing.tendon_forces()
     elif mode == 'prism tower':
         strut_count = 3
-        thing = Tensegrity(*prism_tower(), name='prism')
+        thing = Tensegrity(*prism_tower(verbose=True), name='prism')
+        thing.plot()
     elif mode == 'stabilize prism1':
         stabilize_prism1(n=5, verbose=True)
     elif mode == 'prism1 stability sweep':
