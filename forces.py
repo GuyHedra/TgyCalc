@@ -72,51 +72,93 @@ def prism1(n=3, hr_ratio=1, twist=math.pi / 2 - math.pi / 3, verbose=False):
     return vertices, struts, tendons
 
 
-def prism_tower(n=3, levels=2, hr_ratio=[2, 2], level_twist=[math.pi*(1/2-1/3), math.pi*(1/2-1/3)],
+def prism_tower(n=3, levels=2, height=[1, 1], radius=[[3, 3], [3, 3]], level_twist=[math.pi*(1/2-1/3), math.pi*(1/2-1/3)],
                 interface_twist=[math.pi/3], interface_overlap=[0.2], verbose=False):
     """ Returns an numpy array of vertex coordinates, a list of struts and a list of tendons
         len(hr_ratio) and len(level_twist) must both equal levels
         len(interface_twist) len(interface_overlap) must equal levels - 1
     """
+    # todo *** replace hr_ratio with height and radius parameters. Radius must be specified for the top and bottom of
+    # each layer
     # todo add strut_length and radius as alternative to hr_ratio
-    if not isinstance(hr_ratio, np.ndarray):
-        hr_ratio = np.array(hr_ratio)
+    # todo add choice of chirality [left, right, alternating starting with left, alternating starting with right]
+    # todo add choice of skipping struts with inter-layer vertical struts for high n values to get a stiffer structure
+    # def v_index_to_array(i):
+    #     """ Provides a translation from the vertex indices used in struts and tendons to the array indices used
+    #         in vertices_array"""
+    #     level = round(i / n
+    #     return
+    def strut_vertices(lvl, i):
+        return 2 * lvl * n + i, 2 * lvl * n + n + i), range(2 * level * n + n, 2 * level * n + 2 * n)
+    if not isinstance(height, np.ndarray):
+        height = np.array(height)
+    if not isinstance(radius, np.ndarray):
+        radius = np.array(radius)
     # h and radius have shape (levels,) since each element belongs to a level
-    h = np.array(levels * [1])
-    radius = h / hr_ratio
-    # Build arrays containing z, theta_start so that we can build the array of vertices
+    # h = np.array(levels * [1])
+    # radius = h / hr_ratio
+    # Build arrays containing z, theta_start so that we can build the array of vertex_array
     # theta_start_array and z_array have shape (levels, 2) since each level contains [bottom, top]
     theta_start_array = [[0, level_twist[0]]]
     z_array = [[0, h[0]]]
     if levels > 1:
         # todo put for loop below into two comprehensions
         for level in range(1, levels):
-            # bottom_theta = theta_start_array[level - 1][1] - interface_twist[level - 1]
             bottom_theta = theta_start_array[level - 1][1] + interface_twist[level - 1]
             top_theta = bottom_theta + level_twist[level]
             theta_start_array.extend([[bottom_theta, top_theta]])
             bottom_z = z_array[level - 1][1] - interface_overlap[level - 1]
-            top_z = bottom_z + h[level]
+            top_z = bottom_z + height[level]
             z_array.extend([[bottom_z, top_z]])
     # Build theta array
     theta_step = 2 * math.pi / n
     theta_array = []
     for level in range(levels):
         theta_array.extend([[[theta_start_array[level][top] + i * theta_step for i in range(n)] for top in [0, 1]]])
-    # vertices.shape is (level, layer, i, xyz)
-    vertices = np.array([[[[radius[level]*math.cos(theta_array[level][layer][i]),
-                            radius[level]*math.sin(theta_array[level][layer][i]),
+    # vertex_array.shape is (level, layer, i, 3)
+    vertex_array = np.array([[[[radius[level, layer]*math.cos(theta_array[level][layer][i]),
+                            radius[level, layer]*math.sin(theta_array[level][layer][i]),
                             z_array[level][layer]] for i in range(n)] for layer in [0, 1]] for level in range(levels)])
-    """ Some vertices index offsets:
+    """ Some vertex_array index offsets:
     1:e vertex in layer=0 (bottom layer) of level: 2 * level * n
     1:e vertex in layer=1 (top layer) of level: 2 * level * n + n
     1: vertex in layer=1 (top layer) of top level: 2 * levels * n - n
     """
-    # struts
-    struts = np.empty([levels, n, 2], dtype=int)  # shape = (levels, n, layers)
-    for level in range(levels):
-        struts[level] = [[v0, v1] for v0, v1 in zip(range(2 * level * n, 2 * level * n + n),
-                                                    range(2 * level * n + n, 2 * level * n + 2 * n))]
+    # struts shape is (levels, n, 2)
+    struts = np.array([[[v0, v1] for v0, v1 in zip(range(2 * level * n, 2 * level * n + n),
+                                                   range(2 * level * n + n, 2 * level * n + 2 * n))]
+                       for level in range(levels)], dtype=int)
+    """ The default prism tower set of vertical tendons creates a number of special case vertex_array that have
+        only two tendons. 
+        It is necessary to ensure that these two tendons lie in a plane with the associated strut in order for the
+        structure to be conditionally stable."""
+    # strut_lengths shape is (levels, n)
+    # strut_lengths = np.array([[np.linalg.norm(vertex_list[struts[level, i, 1]] - vertex_list[struts[level, i, 0]])
+    # strut_lengths = np.array([[np.linalg.norm(vertex_array.flat[struts[level, i, 1]] - vertex_array.flat[struts[level, i, 0]])
+    strut_lengths = np.array([[np.linalg.norm(vertex_array[level, i, 1]] - vertex_array.flat[struts[level, i, 0]])
+                               for i in range(n)] for level in range(levels)])
+    print('strut_lengths', strut_lengths)
+    # interface_midpoints shape is (layer, n, 3) where 3 is [x, y, z]
+    interface_midpoints = np.array([[(vertices.flat[2 * level * n + n + i] + vertices.flat[2 * level * n + n + j]) / 2
+                                    for i, j in zip(range(n), np.roll(list(range(n)), 1))]
+                                    for level in range(levels - 1)])
+    print('interface_midpoints', interface_midpoints)
+    # Construct the unit strut vectors we need to reposition the two tendon vertex_array
+
+    unit_strut_vectors = np.empty([levels, n, 3])
+    for level in range(1, levels):
+        for i in range(n):
+            vector = vertex_array.flat[struts[level, i, 1]] - interface_midpoints[level - 1, i]
+            vector_mag = np.linalg.norm(vector)
+            unit_strut_vectors[level, i] = vector / vector_mag
+    # replace the two-tendon vertex coordinates so that the two tendons and associated strut all lie in a plane
+    # while preserving the strut length
+    for level in range(1, levels):
+        for i in range(n):
+            vertex_array[level, 0, i] = (vertex_array.flat[struts[level, i, 1]] +
+                                     strut_lengths[level, i] * unit_strut_vectors[level - 1, i])
+
+
     cap_waist_tendons = np.empty([2, n, 2], dtype=int)  # shape = (len[top, bottom], n, len[v0, v1])
     # bottom cap waist tendons
     cap_waist_tendons[0] = [[v0, v1] for v0, v1 in zip(range(n), np.roll(list(range(n)), 1))]
@@ -162,11 +204,11 @@ def prism_tower(n=3, levels=2, hr_ratio=[2, 2], level_twist=[math.pi*(1/2-1/3), 
         # print('vertices', vertices)
         print('struts', struts)
         print('tendons', tendons)
-    vertex_list = vertices.reshape(-1, 3)
-    strut_list = struts.reshape(-1, 2)
-    tendon_list = tendons.reshape(-1, 2)
-    return vertex_list, strut_list, tendon_list
-
+    # vertex_list = vertices.reshape(-1, 3)
+    # strut_list = struts.reshape(-1, 2)
+    # tendon_list = tendons.reshape(-1, 2)
+    # return vertex_list, strut_list, tendon_list
+    return vertices.reshape(-1, 3), struts.reshape(-1, 2), tendons.reshape(-1, 2)
 
 
 class Tensegrity:
@@ -392,16 +434,21 @@ if __name__ == '__main__':
         thing.tendon_forces()
     elif mode == 'prism tower':
         strut_count = 3
-        level_count = 3
-        h_to_r = level_count * [3]
+        level_count = 2
+        # h_to_r = level_count * [3]
+        h = level_count * [3]
+        r = level_count * [[1, 1]]
+        if level_count == 2:
+            r = [[1, 1], [0.8, 1]]
         l_twist = level_count * [math.pi*(1/2 - 1/strut_count)]
         iface_twist = (level_count - 1) * [math.pi / strut_count]
-        iface_overlap = (level_count - 1) * [0.2]
+        iface_overlap = (level_count - 1) * [0.3]
         # thing = Tensegrity(*prism_tower(verbose=True), name='prism')
-        thing = Tensegrity(*prism_tower(n=strut_count, levels=level_count, hr_ratio=h_to_r, level_twist=l_twist,
+        thing = Tensegrity(*prism_tower(n=strut_count, levels=level_count, height=h, radius=r, level_twist=l_twist,
                                         interface_twist=iface_twist, interface_overlap=iface_overlap, verbose=False),
                            name='prism')
         thing.plot()
+        thing.tendon_forces(verbose=True)
     elif mode == 'stabilize prism1':
         stabilize_prism1(n=5, verbose=True)
     elif mode == 'prism1 stability sweep':
