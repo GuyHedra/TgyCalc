@@ -261,7 +261,35 @@ class Tensegrity:
             self.vtx_coords[vtx_index] = self.vtx_coords[pivot_vtx_index] + strut_length * new_unit_vector
 
     def all_vtx_forces(self, verbose=False):
-        return [self.vtx_forces(vtx_index) for vtx_index in range(len(self.vtx_coords))]
+        all_forces = [self.vtx_forces(vtx_index)[1] for vtx_index in range(len(self.vtx_coords))]
+        if verbose:
+            print('All member force vectors by vertex')
+            for force in all_forces:
+                print(force)
+        return all_forces
+
+    def tendon_f_difference(self, verbose=False):
+        """ returns a list containing the difference between the forces at each end of each tendon in tendon index
+        order"""
+        all_force_vectors = [self.vtx_forces(vtx_index)[1] for vtx_index in range(len(self.vtx_coords))]
+        vtx_tendon_f_mags = []  # list of list of tendon force magnitudes for each vertex
+        for vtx_member_forces in all_force_vectors:
+            f_tendon_mags = []
+            for member_force in vtx_member_forces[1:]:  # drop the strut force in vtx_member_forces[0]
+                f_tendon_mags.extend([np.linalg.norm(member_force)])
+            vtx_tendon_f_mags.extend([f_tendon_mags])
+        tendon_f_pairs = np.full([len(self.tendons), 2], -1e10, dtype=np.float64)
+        for vertex_index, f_mags in enumerate(vtx_tendon_f_mags):
+            for vtx_t_index, t_force in enumerate(f_mags):
+                tendon_index = self.vtx_tendons[vertex_index][vtx_t_index]
+                t_vtx_index = list(self.tendons[tendon_index]).index(vertex_index)  # todo put this in a function
+                tendon_f_pairs[tendon_index, t_vtx_index] = vtx_tendon_f_mags[vertex_index][vtx_t_index]
+        differences = [tendon_f_pair[0] - tendon_f_pair[1] for tendon_f_pair in tendon_f_pairs]
+        if verbose:
+            print('tendon force differences', differences)
+            for tendon_index in range(len(self.tendons)):
+                print(self.tendons[tendon_index, 0], self.tendons[tendon_index, 1], differences[tendon_index])
+        return differences
 
     def vtx_forces(self, vtx_index, verbose=False):
         """ Build the force matrix to solve"""
@@ -296,8 +324,7 @@ class Tensegrity:
                 # make b and x look like the other member count cases so we don't break any downstream code
                 x = np.vstack([[f_strut], x_3])
                 b = np.array((member_count - 1) * [[0.0]] + [[f_strut]])
-                print('x from 3', x)
-
+                # print('x from 3', x)
             elif member_count == 4:  # 1 strut, 3 tendons
                 a = np.vstack((a, [1] + (member_count - 1) * [0]))
                 b = np.array((member_count - 1) * [[0.0]] + [[f_strut]])
@@ -309,17 +336,13 @@ class Tensegrity:
                 b = np.array((member_count - 2) * [[0.0]] + [[f_strut]] + [[f_interlayer_vertical_tendon]])
                 """ Solve the force matrix"""
                 x = np.linalg.solve(a, b)
-        # print('vtx_index', vtx_index)
-        # print('a', a)
-        # print('b', b)
-        # print('x', x)
         # todo replace for loop below with list comprehension. No need for dot products, just sum the vector and check
         # if the tendon vectors are in the opposite direction of the strut force vector
-        total_tendon_forces = 0
-        for f_unit_vector, tendon_force in zip(self.vtx_f_unit_vectors[0][1:], x[1:]):
-            strut_tendon_dot = np.dot(f_unit_vector, self.vtx_f_unit_vectors[0][0])
-            total_tendon_forces += strut_tendon_dot * tendon_force
-        # f_vectors = (np.transpose(a) * x)[0:member_count, 0:3]
+        # total_tendon_forces = 0
+        # for f_unit_vector, tendon_force in zip(self.vtx_f_unit_vectors[0][1:], x[1:]):
+        #     strut_tendon_dot = np.dot(f_unit_vector, self.vtx_f_unit_vectors[0][0])
+        #     total_tendon_forces += strut_tendon_dot * tendon_force
+        # # f_vectors = (np.transpose(a) * x)[0:member_count, 0:3]
         f_vectors = (a.T * x)[0:member_count, 0:3]
         sum_f_vectors = np.sum(f_vectors, axis=0)
         if verbose:
@@ -550,7 +573,10 @@ if __name__ == '__main__':
         # print('prism_tower vtx_coords:', thing.vtx_coords)
         # thing.plot()
         # x_array, force_vector = thing.vtx_forces(vtx_index=3, verbose=True)
-        x_array, force_vector = thing.vtx_forces(vtx_index=6, verbose=True)
+        # x_array, force_vector = thing.vtx_forces(vtx_index=6, verbose=False)
+        # thing.all_vtx_forces(verbose=True)
+        thing.tendon_f_difference(verbose=True)
+
         # x_array, force_vector = thing.vtx_forces(vtx_index=9, verbose=True)
         # forces, force_vectors = thing.all_vtx_forces(verbose=False)
         # check_force_vectors(force_vectors, verbose=True)
