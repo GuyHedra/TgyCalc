@@ -104,8 +104,8 @@ class Vertex:
         self.tendons.append(tendon)
 
     def tendon_radial_vec(self, tendon, debug=False):
-        strut_vector = np.array(self.strut.position_vec(self.strut.other_vertex_index(self)))
-        tendon_vector = np.array(tendon.position_vec(tendon.other_vertex_index(self)))
+        strut_vector = np.array(self.strut.position_vec(self.strut.other_vtx_index(self)))
+        tendon_vector = np.array(tendon.position_vec(tendon.other_vtx_index(self)))
         tendon_strut_component = ((np.dot(tendon_vector, strut_vector) / np.linalg.norm(strut_vector) ** 2)
                                   * strut_vector)
         vector = tendon_vector - tendon_strut_component
@@ -255,11 +255,11 @@ class Tensegrity:
         """ Populate each vertex's list of tendon_list and strut (members) """
         for strut in self.struts:
             # for vertex in strut.vertex_list:
-            for vertex in strut.vertices:
+            for vertex in strut.vtx_coords:
                 vertex.set_strut(strut)
         for tendon in self.tendons:
             # for vertex in tendon.vertex_list:
-            for vertex in tendon.vertices:
+            for vertex in tendon.vtx_coords:
                 vertex.add_tendon(tendon)
 
     def get_vertices(self):
@@ -268,19 +268,19 @@ class Tensegrity:
 
     def get_struts(self):
         """ returns a list of vertex index pairs that define all struts """
-        return [[self.vertices.index(strut.vertices[0]),
-                 self.vertices.index(strut.vertices[1])] for strut in self.struts]
+        return [[self.vertices.index(strut.vtx_coords[0]),
+                 self.vertices.index(strut.vtx_coords[1])] for strut in self.struts]
 
     def get_tendons(self):
         """ returns a list of vertex index pairs that define all tendons """
-        return [[self.vertices.index(tendon.vertices[0]),
-                 self.vertices.index(tendon.vertices[1])] for tendon in self.tendons]
+        return [[self.vertices.index(tendon.vtx_coords[0]),
+                 self.vertices.index(tendon.vtx_coords[1])] for tendon in self.tendons]
 
     def get_forces(self):
-        struts = [[self.vertices.index(strut.vertices[0]),
-                   self.vertices.index(strut.vertices[1])] for strut in self.struts]
-        tendons = [[self.vertices.index(tendon.vertices[0]),
-                    self.vertices.index(tendon.vertices[1])] for tendon in self.tendons]
+        struts = [[self.vertices.index(strut.vtx_coords[0]),
+                   self.vertices.index(strut.vtx_coords[1])] for strut in self.struts]
+        tendons = [[self.vertices.index(tendon.vtx_coords[0]),
+                    self.vertices.index(tendon.vtx_coords[1])] for tendon in self.tendons]
         vertices = [vertex.coords for vertex in self.vertices]
         forces, termination_type = olof.solve_tensegrity_tensions(np.array(struts), np.array(tendons),
                                                                   np.array(vertices), verbose=False)
@@ -318,32 +318,32 @@ class Tensegrity:
             ax.set_axis_off()
         if struts:
             for strut in self.struts:
-                x = [vertex.coords[0] for vertex in strut.vertices]
-                y = [vertex.coords[1] for vertex in strut.vertices]
-                z = [vertex.coords[2] for vertex in strut.vertices]
+                x = [vertex.coords[0] for vertex in strut.vtx_coords]
+                y = [vertex.coords[1] for vertex in strut.vtx_coords]
+                z = [vertex.coords[2] for vertex in strut.vtx_coords]
                 ax.plot3D(x, y, z, 'red', linewidth=3)
         if tendons:
             for tendon in self.tendons:
-                x = [vertex.coords[0] for vertex in tendon.vertices]
-                y = [vertex.coords[1] for vertex in tendon.vertices]
-                z = [vertex.coords[2] for vertex in tendon.vertices]
+                x = [vertex.coords[0] for vertex in tendon.vtx_coords]
+                y = [vertex.coords[1] for vertex in tendon.vtx_coords]
+                z = [vertex.coords[2] for vertex in tendon.vtx_coords]
                 ax.plot3D(x, y, z, 'grey', linewidth=1)
         if debug:
-            # for vertex in self.vertices:
+            # for vertex in self.vtx_coords:
             strut = self.struts[0]
-            vertex = strut.vertices[0]
+            vertex = strut.vtx_coords[0]
             tendon = vertex.tendon_list[0]
-            strut_vector = np.array(strut.position_vec(strut.other_vertex_index(vertex)))
+            strut_vector = np.array(strut.position_vec(strut.other_vtx_index(vertex)))
             # ax.quiver(*vertex.coords, *strut_vector, color='orange', linewidth=3)
             coords = [val for pair in zip(vertex.coords, strut_vector) for val in pair]
             x = [vertex.coords[0] for vertex in [vertex.coords, strut_vector]]
             y = [vertex.coords[1] for vertex in [vertex.coords, strut_vector]]
             z = [vertex.coords[2] for vertex in [vertex.coords, strut_vector]]
-            # y = [vertex.coords[1] for vertex in tendon.vertices]
-            # z = [vertex.coords[2] for vertex in tendon.vertices]
+            # y = [vertex.coords[1] for vertex in tendon.vtx_coords]
+            # z = [vertex.coords[2] for vertex in tendon.vtx_coords]
             ax.plot3D(x, y, z, 'orange', linewidth=5)
-                      # *self.strut_list[0].position_vec(self.strut_list[0].vertices[1]), 'green', linewidth=3)
-            tendon_vector = np.array(tendon.position_vec(tendon.other_vertex_index(vertex)))
+                      # *self.strut_list[0].position_vec(self.strut_list[0].vtx_coords[1]), 'green', linewidth=3)
+            tendon_vector = np.array(tendon.position_vec(tendon.other_vtx_index(vertex)))
             # ax.quiver(*vertex.coords, *tendon_vector, color='orange', linewidth=3)
             tendon_strut_component = ((np.dot(tendon_vector, strut_vector) / np.linalg.norm(strut_vector) ** 2)
                                       * strut_vector)
@@ -494,8 +494,8 @@ class Tensegrity:
                   f'{"theta": >{coord_width}}',
                   f'{"z   ": >{coord_width}}')
             for tendon in self.tendons:
-                vertex0 = tendon.vertices[0]
-                vertex1 = tendon.vertices[1]
+                vertex0 = tendon.vtx_coords[0]
+                vertex1 = tendon.vtx_coords[1]
                 print(f'{"Tendon": <{label_width}}',
                       f'{str(np.array(vertex0.cyl_coordinates_deg)): <{array_3_width}}',
                       f'{str(np.array(vertex1.cyl_coordinates_deg)): <{array_3_width}}',
@@ -520,8 +520,8 @@ class Tensegrity:
                   f'{"theta": >{coord_width}}',
                   f'{"z   ": >{coord_width}}')
             for strut in self.struts:
-                vertex0_cyl = strut.vertices[0].cyl_coordinates_deg
-                vertex1_cyl = strut.vertices[1].cyl_coordinates_deg
+                vertex0_cyl = strut.vtx_coords[0].cyl_coordinates_deg
+                vertex1_cyl = strut.vtx_coords[1].cyl_coordinates_deg
                 print(f'{"Strut": <{label_width}}',
                       f'{str(np.array(vertex0_cyl)): <{array_3_width}}',
                       f'{str(np.array(vertex1_cyl)): <{array_3_width}}',
@@ -747,9 +747,9 @@ class KitePar(Tensegrity):
                 vertex = strut.top_vertex  # this is the vertex that is moving
                 tendons = vertex.tendon_list
                 #  we use tendon target lengths and strut current lengths to support our algorithmic strategy
-                trial_positions = trilateration(strut.other_vertex_index(vertex).coords,
-                                                tendons[0].other_vertex_index(vertex).coords,
-                                                tendons[1].other_vertex_index(vertex).coords,
+                trial_positions = trilateration(strut.other_vtx_index(vertex).coords,
+                                                tendons[0].other_vtx_index(vertex).coords,
+                                                tendons[1].other_vtx_index(vertex).coords,
                                                 strut.curr_length, tendons[0].targ_length, tendons[1].targ_length
                                                 )
                 vertex.coords = midpoint(trial_positions[0], trial_positions[1])
@@ -762,9 +762,9 @@ class KitePar(Tensegrity):
                 # print('strut.other_vertex(vertex).coords', strut.other_vertex(vertex).coords, strut.length)
                 # self.add_debug_points(vertex.coords, color='green')
                 # print('vertex.coords', vertex.coords)
-                self.add_debug_points(tendons[0].other_vertex_index(vertex).coords, color='green')
+                self.add_debug_points(tendons[0].other_vtx_index(vertex).coords, color='green')
                 # print('tendon_list[0].other_vertex(vertex).coords', tendon_list[0].other_vertex(vertex).coords, tendon_list[0].length)
-                self.add_debug_points(tendons[1].other_vertex_index(vertex).coords, color='green')
+                self.add_debug_points(tendons[1].other_vtx_index(vertex).coords, color='green')
                 # print('tendon_list[1].other_vertex(vertex).coords', tendon_list[1].other_vertex(vertex).coords, tendon_list[1].length)
             for strut in self.struts:
                 strut.set_targ_length(strut.curr_length + strut_step)
