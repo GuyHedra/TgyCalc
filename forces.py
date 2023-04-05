@@ -791,7 +791,7 @@ if __name__ == '__main__':
         params = stabilize_tower_grad_descent(t_params, learn_rate=0.001, max_steps=100)
         params.print_tune
     elif mode == 'stabilize prism tower n=4 levels=2':
-        strut_count = 4
+        strut_count = 3
         level_count = 2
         # h_to_r = level_count * [3]
         h = level_count * [1]
@@ -807,5 +807,5 @@ if __name__ == '__main__':
                                    interface_twist=iface_twist, interface_overlap=iface_overlap)
         t_params.print_tune
         # stabilize_prism_tower(t_params)
-        params = stabilize_tower_grad_descent(t_params, learn_rate=0.00001, max_steps=100)
+        params = stabilize_tower_grad_descent(t_params, learn_rate=0.001, max_steps=100)
         params.print_tune
