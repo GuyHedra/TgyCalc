@@ -238,7 +238,6 @@ class Tensegrity:
                 self.vtx_f_unit_vectors[vertex_index].extend([vector / np.linalg.norm(vector)])
         # print(self.vtx_f_unit_vectors)
 
-
     def planarize_2_tendon_vertices(self):
         """ The default prism tower set of vertical tendons creates a number of special case vertex_array that have
              only two tendons.
@@ -265,7 +264,7 @@ class Tensegrity:
             self.vtx_coords[vtx_index] = self.vtx_coords[pivot_vtx_index] + strut_length * new_unit_vector
 
     def all_vtx_forces(self, verbose=False):
-        all_forces = [self.vtx_forces(vtx_index)[1] for vtx_index in range(len(self.vtx_coords))]
+        all_forces = [self.vtx_tendon_forces(vtx_index)[1] for vtx_index in range(len(self.vtx_coords))]
         if verbose:
             print('All member force vectors by vertex')
             for force in all_forces:
@@ -273,36 +272,29 @@ class Tensegrity:
         return all_forces
 
     def tendon_f_difference(self, unique=True, verbose=False):
+        # def tendon_f_difference(self, unique=False, verbose=False):
         """ returns a list containing the difference between the forces at each end of each tendon in tendon index
         order
         if unique, return only unique differences by assuming that each nth tendon is unique"""
-        # todo if we looped through the unique tendons instead of all the vertices we could speed up this code
-        all_force_vectors = [self.vtx_forces(vtx_index)[1] for vtx_index in range(len(self.vtx_coords))]
-        vtx_tendon_f_mags = []  # list of list of tendon force magnitudes for each vertex
-        for vtx_member_forces in all_force_vectors:
-            f_tendon_mags = []
-            for member_force in vtx_member_forces[1:]:  # drop the strut force in vtx_member_forces[0]
-                f_tendon_mags.extend([np.linalg.norm(member_force)])
-            vtx_tendon_f_mags.extend([f_tendon_mags])
-        tendon_f_pairs = np.full([len(self.tendons), 2], -1e10, dtype=np.float64)
-        for vertex_index, f_mags in enumerate(vtx_tendon_f_mags):
-            for vtx_t_index, t_force in enumerate(f_mags):
-                tendon_index = self.vtx_tendons[vertex_index][vtx_t_index]
-                t_vtx_index = list(self.tendons[tendon_index]).index(vertex_index)  # todo put this in a function
-                tendon_f_pairs[tendon_index, t_vtx_index] = vtx_tendon_f_mags[vertex_index][vtx_t_index]
-        differences = [tendon_f_pair[0] - tendon_f_pair[1] for tendon_f_pair in tendon_f_pairs]
-        if verbose:
-            print('tendon force differences', differences)
-            for tendon_index in range(len(self.tendons)):
-                print(self.tendons[tendon_index, 0], self.tendons[tendon_index, 1], differences[tendon_index])
+        vtx_force_vectors = [self.vtx_tendon_forces(vtx_index) for vtx_index in range(len(self.vtx_coords))]
+        f_differences = []
+        for tendon_index, tendon in enumerate(self.tendons):
+            # prepare the index that selects the correct tendon from the vertex's list of tendons
+            vtx0_to_tendon_index = self.vtx_tendons[tendon[0]].index(tendon_index)
+            # get the vertex 0 force for this tendon
+            vtx0_force = vtx_force_vectors[tendon[0]][vtx0_to_tendon_index]
+            # prepare the index that selects the correct tendon from the vertex's list of tendons
+            vtx1_to_tendon_index = self.vtx_tendons[tendon[1]].index(tendon_index)
+            # get the vertex 1 force for this tendon
+            vtx1_force = vtx_force_vectors[tendon[1]][vtx1_to_tendon_index]
+            f_differences.extend(vtx0_force - vtx1_force)
         if unique:
-            return differences[::self.n]
+            return f_differences[::self.n]  # return only every nth force sum
         else:
-            return differences
+            return f_differences
 
-    def vtx_forces(self, vtx_index, verbose=False):
-        """ Build the force matrix to solve"""
-        # we will start with vertex 0
+    def vtx_tendon_forces(self, vtx_index, verbose=False):
+        """ Return the forces on each tendon connected to the vertex at vtx_index"""
         f_strut = 1.0
         f_interlayer_vertical_tendon = 0.4 * f_strut
         a = np.column_stack([np.transpose(self.vtx_f_unit_vectors[vtx_index])])
@@ -368,8 +360,9 @@ class Tensegrity:
                     print('Prism is stable')
                 else:
                     print('Prism is unstable')
-        # return x[1:]
-        return x, f_vectors
+        return x[1:]  # skip the strut forces at x[0]
+        # return x, f_vectors
+        # return x
 
     def plot(self, struts=True, tendons=True, lateral_f=False, vertex_f=False, axes=False, debug=False):
         """ plots tendons and struts using matplotlib """
@@ -620,7 +613,7 @@ def stabilize_prism_tower(tower_params, verbose=True):
 
 def plot_prism1_stability_space(n=3):
     def waist_force_difference(hr_ratio, twist):
-        t_forces = Tensegrity(*prism1(n=n, hr_ratio=hr_ratio, twist=twist), name='prism').vtx_forces(verbose=False)
+        t_forces = Tensegrity(*prism1(n=n, hr_ratio=hr_ratio, twist=twist), name='prism').vtx_tendon_forces(verbose=False)
         return t_forces[0][0] - t_forces[1][0]
     # twist_values = np.linspace(math.pi * (1/2 - 1/n - 1/4), math.pi * (1/2 - 1/n + 1/4), 11)
     twist_values = np.linspace(math.pi * (1/2 - 1/n - 1/10), math.pi * (1/2 - 1/n + 1/10), 21)
@@ -650,7 +643,7 @@ def stabilize_prism1(n=3, verbose=False):
     initial_step_size = 10 * min_step_size
     initial_twist = math.pi * (1 / 2 - 1 / n + 1/3)
     prism = Tensegrity(*prism1(n=n, twist=initial_twist), name='prism')
-    t_forces = prism.vtx_forces()
+    t_forces = prism.vtx_tendon_forces()
     error = t_forces[0][0] - t_forces[1][0]
     error_history = [error]
     step_count = 0
@@ -660,7 +653,7 @@ def stabilize_prism1(n=3, verbose=False):
     twist = initial_twist + step
     slope_history = []
     while abs(error) > err_tol and step_count < max_step_count:
-        t_forces = Tensegrity(*prism1(n=n, hr_ratio=1, twist=twist), name='prism').vtx_forces(verbose=False)
+        t_forces = Tensegrity(*prism1(n=n, hr_ratio=1, twist=twist), name='prism').vtx_tendon_forces(verbose=False)
         error = t_forces[0][0] - t_forces[1][0]
         slope = (error_history[-1] - error) / step
         error_history.append(error)
@@ -696,7 +689,7 @@ if __name__ == '__main__':
     # mode = 'tp prism sweep hr ratio'
     if mode == 'kite':
         thing = Tensegrity(*kite(), mode)
-        thing.vtx_forces()
+        thing.vtx_tendon_forces()
     elif mode == 'stabilize prism1':
         stabilize_prism1(n=5, verbose=True)
     elif mode == 'prism1 stability sweep':
@@ -716,16 +709,16 @@ if __name__ == '__main__':
         strut_count = 6
         thing = Tensegrity(*prism1(n=strut_count, hr_ratio=2, twist=math.pi / 2 - math.pi / strut_count), name='prism')
         thing.plot()
-        thing.vtx_forces(verbose=True)
+        thing.vtx_tendon_forces(verbose=True)
     elif mode == 'prism':
         thing = Tensegrity(*prism_n3(), mode)
         print('prism_n3 vtx_coords:', thing.vtx_coords)
         thing.plot()
-        thing.vtx_forces(verbose=True)
+        thing.vtx_tendon_forces(verbose=True)
     elif mode == 'unstable prism':
         thing = Tensegrity(*prism_n3(alpha=5 * math.pi / 6 + 0.01), name='prism')
         # thing = Tensegrity(*prism(alpha=5*math.pi/6), name='prism')
-        thing.vtx_forces(verbose=True)
+        thing.vtx_tendon_forces(verbose=True)
     elif mode == 'tp prism':
         """ Use TgyPar code to generate tensegrity and find forces """
         tp_thing = tp.PrismTower(n=3, levels=1, radii=[5, 5], heights=[10])
@@ -739,7 +732,7 @@ if __name__ == '__main__':
         for ratio in [0.1, 0.25, 0.5, 0.85, 1, 2, 3, 5, 10, 20, 50, 100]:
             tp_thing = tp.PrismTower(n=3, levels=1, radii=[5, 5], heights=[5 * ratio])
             thing = Tensegrity(tp_thing.get_vertices(), tp_thing.get_struts(), tp_thing.get_tendons(), name='prism')
-            tendon_forces = thing.vtx_forces()
+            tendon_forces = thing.vtx_tendon_forces()
             print(tendon_forces)
             print(tendon_forces[0][0])
             print(tendon_forces[2][0])
@@ -807,5 +800,6 @@ if __name__ == '__main__':
                                    interface_twist=iface_twist, interface_overlap=iface_overlap)
         t_params.print_tune
         # stabilize_prism_tower(t_params)
-        params = stabilize_tower_grad_descent(t_params, learn_rate=0.001, max_steps=100)
+        # params = stabilize_tower_grad_descent(t_params, learn_rate=0.001, max_steps=100)
+        params = stabilize_tower_grad_descent(t_params, learn_rate=0.001, max_steps=200)
         params.print_tune
