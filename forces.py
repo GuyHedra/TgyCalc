@@ -504,11 +504,18 @@ class TowerTuneParams:
         # return np.array(height_list + radius_list + level_twist_list + interface_twist_list + interface_overlap_list)
         return np.array(overlap_radius_list + level_twist_list + interface_twist_list + interface_overlap_list)
 
+    @property
+    def print_tune(self):
+        print('overlap radius', [p for r_level in self.radius[1:] for p in r_level][::2])
+        print('level twist', [math.degrees(tw) for tw in self.level_twist])
+        print('interface twist', [math.degrees(itw) for itw in self.interface_twist])
+        print('interface overlap', [io for io in self.interface_overlap])
 
-def stabilize_tower_grad_descent(tower_params, verbose=True):
+
+def stabilize_tower_grad_descent(tower_params, learn_rate=0.001, max_steps=100, verbose=True):
     """ Adjust the initial prism_tower parameters to achieve a stable structure using gradient descent"""
-    max_steps = 100
-    learn_rate = 0.001
+    # max_steps = 100
+    # learn_rate = 0.001
     max_error = 0.001
     min_difference = 0.001
     tune_p_count = len(tower_params.tune_param_array)
@@ -532,7 +539,11 @@ def stabilize_tower_grad_descent(tower_params, verbose=True):
         error_history.extend([np.sum(np.array(
             Tensegrity(*prism_tower(*new_params.arguments), name='prism').tendon_f_difference()))])
         error_difference = error_history[step - 1] - error_history[step]
-    print('grad descent finished on step', step, 'with error history', error_history)
+    if verbose:
+        print('grad descent finished on step', step, 'with error history', error_history)
+        print('error sum', error_history[-1])
+        print('params', param_history[-1].tune_param_array)
+    return param_history[-1]
 
 
 def tower_gradient(tune_params, error_of_tune_params, epsilon=0.000001):
@@ -675,7 +686,8 @@ if __name__ == '__main__':
     # mode = 'kite'
     # mode = 'prism1'  # builds single level prism using n, hr_ratio and twist
     # mode = 'prism tower'
-    mode = 'stabilize prism tower'
+    # mode = 'stabilize prism tower n=3 levels=2'
+    mode = 'stabilize prism tower n=4 levels=2'
     # mode = 'stabilize prism1'
     # mode = 'prism1 stability sweep'  # sweep twist and hr ratio, plot difference in waist tendon forces
     # mode = 'prism'
@@ -760,19 +772,40 @@ if __name__ == '__main__':
         # forces, force_vectors = thing.all_vtx_forces(verbose=False)
         # check_force_vectors(force_vectors, verbose=True)
         # check_force_vectors(thing.vtx_forces(), verbose=True)
-    elif mode == 'stabilize prism tower':
+    elif mode == 'stabilize prism tower n=3 levels=2':
         strut_count = 3
         level_count = 2
         # h_to_r = level_count * [3]
         h = level_count * [1]
         r = level_count * [[1, 1]]
-        if level_count == 2:
-            r = [[1, 1], [0.8, 1]]
+        if level_count > 2:
+            # r = [[1, 1], (level_count - 1) * [0.78, 1]]
+            r = [[1, 1], (level_count - 1) * [0.8, 1]]
         l_twist = level_count * [math.pi * (1 / 2 - 1 / strut_count)]
         iface_twist = (level_count - 1) * [math.pi / strut_count]
+        # iface_overlap = (level_count - 1) * [0.25]
         iface_overlap = (level_count - 1) * [0.3]
         t_params = TowerTuneParams(n=strut_count, levels=level_count, height=h, radius=r, level_twist=l_twist,
-                                       interface_twist=iface_twist, interface_overlap=iface_overlap)
+                                   interface_twist=iface_twist, interface_overlap=iface_overlap)
         # stabilize_prism_tower(t_params)
-        stabilize_tower_grad_descent(t_params)
-
+        params = stabilize_tower_grad_descent(t_params, learn_rate=0.001, max_steps=100)
+        params.print_tune
+    elif mode == 'stabilize prism tower n=4 levels=2':
+        strut_count = 4
+        level_count = 2
+        # h_to_r = level_count * [3]
+        h = level_count * [1]
+        r = level_count * [[1, 1]]
+        if level_count > 2:
+            # r = [[1, 1], (level_count - 1) * [0.78, 1]]
+            r = [[1, 1], (level_count - 1) * [0.8, 1]]
+        l_twist = level_count * [math.pi * (1 / 2 - 1 / strut_count)]
+        iface_twist = (level_count - 1) * [math.pi / strut_count]
+        # iface_overlap = (level_count - 1) * [0.25]
+        iface_overlap = (level_count - 1) * [0.3]
+        t_params = TowerTuneParams(n=strut_count, levels=level_count, height=h, radius=r, level_twist=l_twist,
+                                   interface_twist=iface_twist, interface_overlap=iface_overlap)
+        t_params.print_tune
+        # stabilize_prism_tower(t_params)
+        params = stabilize_tower_grad_descent(t_params, learn_rate=0.00001, max_steps=100)
+        params.print_tune
