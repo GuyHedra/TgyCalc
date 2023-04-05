@@ -86,6 +86,7 @@ def prism_tower(n=3, levels=2, height=[1, 1], radius=[[3, 3], [3, 3]], level_twi
         len(hr_ratio) and len(level_twist) must both equal levels
         len(interface_twist) len(interface_overlap) must equal levels - 1
     """
+    # todo should prism_tower be a class that inherits Tensegrity???
     # todo *** replace hr_ratio with height and radius parameters. Radius must be specified for the top and bottom of
     # each layer
     # todo add choice of chirality [left, right, alternating starting with left, alternating starting with right]
@@ -237,6 +238,7 @@ class Tensegrity:
                 self.vtx_f_unit_vectors[vertex_index].extend([vector / np.linalg.norm(vector)])
         # print(self.vtx_f_unit_vectors)
 
+
     def planarize_2_tendon_vertices(self):
         """ The default prism tower set of vertical tendons creates a number of special case vertex_array that have
              only two tendons.
@@ -274,6 +276,7 @@ class Tensegrity:
         """ returns a list containing the difference between the forces at each end of each tendon in tendon index
         order
         if unique, return only unique differences by assuming that each nth tendon is unique"""
+        # todo if we looped through the unique tendons instead of all the vertices we could speed up this code
         all_force_vectors = [self.vtx_forces(vtx_index)[1] for vtx_index in range(len(self.vtx_coords))]
         vtx_tendon_f_mags = []  # list of list of tendon force magnitudes for each vertex
         for vtx_member_forces in all_force_vectors:
@@ -480,6 +483,11 @@ class TowerTuneParams:
         self.interface_twist = p_list[self.interface_twist_offset:self.interface_overlap_offset]
         self.interface_overlap = p_list[self.interface_overlap_offset:self.param_count]
 
+    def set_single_tune_param(self, i, p):
+        p_list = self.tune_param_array
+        p_list[i] = p
+        self.set_tune_params(p_list)
+
     @property
     def arguments(self):
         return self.n, self.levels, self.height, self.radius, self.level_twist, self.interface_twist, \
@@ -494,12 +502,58 @@ class TowerTuneParams:
         interface_twist_list = [itw for itw in self.interface_twist]
         interface_overlap_list = [io for io in self.interface_overlap]
         # return np.array(height_list + radius_list + level_twist_list + interface_twist_list + interface_overlap_list)
-        return np.array(overlap_radius_list + level_twist_list + interface_twist_list + interface_overlap_list
+        return np.array(overlap_radius_list + level_twist_list + interface_twist_list + interface_overlap_list)
+
+
+def stabilize_tower_grad_descent(tower_params, verbose=True):
+    """ Adjust the initial prism_tower parameters to achieve a stable structure using gradient descent"""
+    max_steps = 100
+    learn_rate = 0.001
+    max_error = 0.001
+    min_difference = 0.001
+    tune_p_count = len(tower_params.tune_param_array)
+    error_history = np.empty(shape=[max_steps + 1])
+    error_history = []
+    # should param_history be a list?
+    param_history = []
+    param_history.extend([tower_params])
+    error_history.extend([np.sum(np.array(Tensegrity(*prism_tower(*param_history[0].arguments),
+                                                     name='prism').tendon_f_difference()))])
+    step = 0
+    error_difference = 2 * min_difference
+    while step < max_steps and abs(error_difference) > min_difference and abs(error_history[-1]) > max_error:
+        step += 1
+        gradient = tower_gradient(param_history[step - 1], error_history[step - 1])
+        new_params = copy.copy(param_history[step - 1])
+        # new_params.set_tune_params(param_history[step - 1].tune_param_array -
+        new_params.set_tune_params(param_history[step - 1].tune_param_array -
+                                   gradient * learn_rate * param_history[step - 1].tune_param_array)
+        param_history.extend([new_params])
+        error_history.extend([np.sum(np.array(
+            Tensegrity(*prism_tower(*new_params.arguments), name='prism').tendon_f_difference()))])
+        error_difference = error_history[step - 1] - error_history[step]
+    print('grad descent finished on step', step, 'with error history', error_history)
+
+
+def tower_gradient(tune_params, error_of_tune_params, epsilon=0.000001):
+    error_of_x_plus_epsilon = np.zeros_like(tune_params.tune_param_array)
+    for i, p in enumerate(tune_params.tune_param_array):
+        # todo check to see if copy.copy is needed
+        t_params_w_epsilon = copy.copy(tune_params)
+        t_params_w_epsilon.set_single_tune_param(i, p + epsilon)
+            # np.sum(np.array(Tensegrity(*prism_tower(*t_params_w_epsilon.arguments).tendon_f_difference())))
+        error_of_x_plus_epsilon[i] = \
+            np.sum(np.array(Tensegrity(*prism_tower(*t_params_w_epsilon.arguments),
+                                       name='prism').tendon_f_difference()))
+        gradient = (error_of_x_plus_epsilon - error_of_tune_params) / epsilon
+    return gradient
+
 
 def stabilize_prism_tower(tower_params, verbose=True):
     """ Adjust the initial prism_tower parameters to achieve a stable structure """
-    max_step_count = 10
-    epsilon_step = 0.05
+    max_step_count = 1000
+    epsilon_step = 0.005
+    # epsilon_step = 0.1
     step_index = 0
     step_tower = Tensegrity(*prism_tower(*tower_params.arguments), name='prism')
     n = tower_params.n
@@ -531,7 +585,8 @@ def stabilize_prism_tower(tower_params, verbose=True):
         """ The best parameter is the one with the strongest correlation to the largest tendon error"""
         best_param_index = np.argmax(abs(param_slopes))
         # step = np.sum(abs(np.array(step_tower.tendon_f_difference()[max_error_index]))) / param_slopes[best_param_index]
-        step = step_tower.tendon_f_difference()[max_error_index] / param_slopes[best_param_index]
+        # step = step_tower.tendon_f_difference()[max_error_index] / param_slopes[best_param_index]
+        step = np.sign(param_slopes[best_param_index]) * epsilon_step
         step_param_array = step_params.tune_param_array
         step_param_array[best_param_index] += step
         step_params.set_tune_params(step_param_array)
@@ -547,9 +602,9 @@ def stabilize_prism_tower(tower_params, verbose=True):
             print('error sum', np.sum(abs(np.array(step_tower.tendon_f_difference()))),
                   'best_param_index', best_param_index, 'max_error_index', max_error_index)
         # todo calculate slope using sum of all errors
+    print('stabilize finished')
     # slope = (np.sum(abs(error_history[step_index - 1])) / np.sum(abs(error_history[step_index]))) / epsilon_step
     # print('slope', slope)
-
 
 
 def plot_prism1_stability_space(n=3):
@@ -718,5 +773,6 @@ if __name__ == '__main__':
         iface_overlap = (level_count - 1) * [0.3]
         t_params = TowerTuneParams(n=strut_count, levels=level_count, height=h, radius=r, level_twist=l_twist,
                                        interface_twist=iface_twist, interface_overlap=iface_overlap)
-        stabilize_prism_tower(t_params)
+        # stabilize_prism_tower(t_params)
+        stabilize_tower_grad_descent(t_params)
 
