@@ -293,10 +293,10 @@ class Tensegrity:
         else:
             return f_differences
 
-    def vtx_tendon_forces(self, vtx_index, verbose=False):
+    def vtx_tendon_forces(self, vtx_index, f_interlayer_tendon_factor=0.4, verbose=False):
         """ Return the forces on each tendon connected to the vertex at vtx_index"""
         f_strut = 1.0
-        f_interlayer_vertical_tendon = 0.4 * f_strut
+        f_interlayer_vertical_tendon = f_interlayer_tendon_factor * f_strut
         a = np.column_stack([np.transpose(self.vtx_f_unit_vectors[vtx_index])])
         member_count = len(self.vtx_f_unit_vectors[vtx_index])
         if self.name == 'kite':
@@ -304,28 +304,19 @@ class Tensegrity:
             b = np.array([(member_count - 1) * [0], [f_strut]])
         elif self.name == 'prism':
             if member_count == 3:  # 1 strut, 2 tendons
-                """ using the normal approach yields a singular matrix. We will make use of the following observations:
-                For the tendons t0 and t1 attached to the end of strut t where t0, t1 and t all lie in a plane we have:
-                The components of f_t0 and f_t1 that are parallel to s must add to s:
-                f_t0 * cos(t0 to s angle) + f_t1 * cos(t1 to s angle) = f_s
-                The components of f_t0 and f_t1 that are orthogonal to s must add to 0
-                f_t0 * sin(t0 to s angle) - f_t1 * sin(t1 to s angle) = 0
-                where f_t0, f_t1 and f_s are the forces on t0, t1 and s respectively
-                """
-                s_f_unit = self.vtx_f_unit_vectors[vtx_index][0]
-                t0_f_unit = self.vtx_f_unit_vectors[vtx_index][1]
-                t1_f_unit = self.vtx_f_unit_vectors[vtx_index][2]
-                cos_t0_s = abs(np.dot(t0_f_unit, s_f_unit))
-                cos_t1_s = abs(np.dot(t1_f_unit, s_f_unit))
-                sin_t0_s = (1 - cos_t0_s ** 2) ** 0.5
-                sin_t1_s = (1 - cos_t1_s ** 2) ** 0.5
-                a_3 = np.array([[cos_t0_s, cos_t1_s], [sin_t0_s, -sin_t1_s]])
-                b_3 = np.array([[f_strut], [0]])
-                x_3 = np.linalg.solve(a_3, b_3)
-                # make b and x look like the other member count cases so we don't break any downstream code
-                x = np.vstack([[f_strut], x_3])
-                b = np.array((member_count - 1) * [[0.0]] + [[f_strut]])
-                # print('x from 3', x)
+                """ using the normal approach yields a singular matrix for two-tendon vertices. We will
+                add a virtual tendon perpendicular to the plane of the two real tendons in order to create a
+                useful matrix for the solver. We will add the magnitude of the force on said virtual tendon to
+                the cost (error) total so that the optimizer will drive it to zero. When the virtual tendon force
+                is zero, then the two real tendons lie in a plane with the strut as desired """
+
+                virtual_tendon_unit = np.cross(self.vtx_f_unit_vectors[vtx_index][1],
+                                               self.vtx_f_unit_vectors[vtx_index][2])
+                a = np.column_stack((a, virtual_tendon_unit))
+                a = np.vstack((a, [1] + member_count * [0]))
+                b = np.array(member_count * [[0.0]] + [[f_strut]])
+                """ Solve the force matrix"""
+                x = np.linalg.solve(a, b)
             elif member_count == 4:  # 1 strut, 3 tendons
                 a = np.vstack((a, [1] + (member_count - 1) * [0]))
                 b = np.array((member_count - 1) * [[0.0]] + [[f_strut]])
@@ -337,13 +328,6 @@ class Tensegrity:
                 b = np.array((member_count - 2) * [[0.0]] + [[f_strut]] + [[f_interlayer_vertical_tendon]])
                 """ Solve the force matrix"""
                 x = np.linalg.solve(a, b)
-        # todo replace for loop below with list comprehension. No need for dot products, just sum the vector and check
-        # if the tendon vectors are in the opposite direction of the strut force vector
-        # total_tendon_forces = 0
-        # for f_unit_vector, tendon_force in zip(self.vtx_f_unit_vectors[0][1:], x[1:]):
-        #     strut_tendon_dot = np.dot(f_unit_vector, self.vtx_f_unit_vectors[0][0])
-        #     total_tendon_forces += strut_tendon_dot * tendon_force
-        # # f_vectors = (np.transpose(a) * x)[0:member_count, 0:3]
         f_vectors = (a.T * x)[0:member_count, 0:3]
         sum_f_vectors = np.sum(f_vectors, axis=0)
         if verbose:
