@@ -293,6 +293,11 @@ class Tensegrity:
         else:
             return f_differences
 
+    def cost(self):
+        """ return the cost, or total error signal """
+        # todo try returning the absolute value
+        return np.sum(np.array(self.tendon_f_difference()))
+
     def vtx_tendon_forces(self, vtx_index, f_interlayer_tendon_factor=0.4, verbose=False):
         """ Return the forces on each tendon connected to the vertex at vtx_index"""
         f_strut = 1.0
@@ -494,15 +499,17 @@ def stabilize_tower_grad_descent(tower_params, learn_rate=0.001, max_steps=100, 
     # max_steps = 100
     # learn_rate = 0.001
     max_error = 0.001
-    min_difference = 0.001
+    min_difference = 0.00001
     tune_p_count = len(tower_params.tune_param_array)
     error_history = np.empty(shape=[max_steps + 1])
     error_history = []
     # should param_history be a list?
     param_history = []
     param_history.extend([tower_params])
-    error_history.extend([np.sum(np.array(Tensegrity(*prism_tower(*param_history[0].arguments),
-                                                     name='prism').tendon_f_difference()))])
+    # error_history.extend([np.sum(np.array(Tensegrity(*prism_tower(*param_history[0].arguments),
+    #                                                  name='prism').tendon_f_difference()))])
+    error_history.extend([Tensegrity(*prism_tower(*param_history[0].arguments),
+                                                     name='prism').cost()])
     step = 0
     error_difference = 2 * min_difference
     while step < max_steps and abs(error_difference) > min_difference and abs(error_history[-1]) > max_error:
@@ -523,7 +530,9 @@ def stabilize_tower_grad_descent(tower_params, learn_rate=0.001, max_steps=100, 
     return param_history[-1]
 
 
-def tower_gradient(tune_params, error_of_tune_params, epsilon=0.000001):
+# def tower_gradient(tune_params, error_of_tune_params, epsilon=0.000001):
+# def tower_gradient(tune_params, error_of_tune_params, epsilon=0.00000001):
+def tower_gradient(tune_params, error_of_tune_params, epsilon=0.0000000001):
     error_of_x_plus_epsilon = np.zeros_like(tune_params.tune_param_array)
     for i, p in enumerate(tune_params.tune_param_array):
         # todo check to see if copy.copy is needed
@@ -785,5 +794,5 @@ if __name__ == '__main__':
         t_params.print_tune
         # stabilize_prism_tower(t_params)
         # params = stabilize_tower_grad_descent(t_params, learn_rate=0.001, max_steps=100)
-        params = stabilize_tower_grad_descent(t_params, learn_rate=0.001, max_steps=200)
+        params = stabilize_tower_grad_descent(t_params, learn_rate=0.001, max_steps=500)
         params.print_tune
