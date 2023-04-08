@@ -15,8 +15,11 @@ class TestTowerTuneParams(unittest.TestCase):
         # iface_twist = (level_count - 1) * [math.pi / strut_count]
         iface_twist = [4.1]
         iface_overlap = [0.3]
+        f_strut = [5.1, 5.2]
+        f_interlayer_vertical_tendon = [6.1]
         t_params = forces.TowerTuneParams(n=strut_count, levels=level_count, height=h, radius=r, level_twist=l_twist,
-                                          interface_twist=iface_twist, interface_overlap=iface_overlap)
+                                          interface_twist=iface_twist, interface_overlap=iface_overlap, f_strut=f_strut,
+                                          f_interlayer_v_tendon=f_interlayer_vertical_tendon)
         p_array = t_params.tune_param_array
         p_array += 0.1
         t_params.set_tune_params(p_array)
@@ -33,8 +36,11 @@ class TestTowerTuneParams(unittest.TestCase):
         # iface_twist = (level_count - 1) * [math.pi / strut_count]
         iface_twist = [4.1, 4.2]
         iface_overlap = [0.3, 0.4]
+        f_strut = [5.1, 5.2, 5.3]
+        f_interlayer_vertical_tendon = [6.1, 6.2]
         t_params = forces.TowerTuneParams(n=strut_count, levels=level_count, height=h, radius=r, level_twist=l_twist,
-                                          interface_twist=iface_twist, interface_overlap=iface_overlap)
+                                          interface_twist=iface_twist, interface_overlap=iface_overlap, f_strut=f_strut,
+                                          f_interlayer_v_tendon=f_interlayer_vertical_tendon)
         p_array = t_params.tune_param_array
         p_array += 0.1
         t_params.set_tune_params(p_array)
