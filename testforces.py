@@ -5,6 +5,7 @@ import math
 
 class TestTowerTuneParams(unittest.TestCase):
     def testfunction(self):
+        # case 1
         strut_count = 3
         level_count = 2
         h = [1.1, 1.2]
@@ -26,6 +27,9 @@ class TestTowerTuneParams(unittest.TestCase):
         new_p_array = t_params.tune_param_array
         for i, p in enumerate(p_array):
             self.assertEqual(p, new_p_array[i])
+        for p, p_label in zip(t_params.tune_param_array, t_params.tune_param_labels):
+            print(p_label, " : ", p)
+        # case 2
         strut_count = 3
         level_count = 3
         h = [1.1, 1.2, 1.3]
