@@ -352,6 +352,7 @@ class Tensegrity:
             if rank == a.shape[0]:
                 """ Solve the force matrix"""
                 x = np.linalg.solve(a, b)
+                # x = np.linalg.lstsq(a, b)
                 if verbose:
                     f_vectors = (a.T * x)[0:member_count, 0:3]
                     sum_f_vectors = np.sum(f_vectors, axis=0)
@@ -442,35 +443,48 @@ class Tensegrity:
         def legend_without_duplicate_labels(figure):
             handles, labels = plt.gca().get_legend_handles_labels()
             by_label = dict(zip(labels, handles))
-            figure.legend(by_label.values(), by_label.keys(), loc='lower right')
+            figure.legend(by_label.values(), by_label.keys(), loc='lower left')
 
         plt.style.use('seaborn-whitegrid')
-        param_fig = plt.figure()
+        markers = ['.', ',', 'o', 'v', '^', '<', '>', '1', '2', '3', '4', '8', 's', 'p', 'P',
+                   '*', '.', ',', 'o', 'v', '^', '<', '>', '1', '2', '3', '4', '8', 's', 'p', 'P', '*']
+        colors = ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black',
+                  'blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black',
+                  'blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black']
+        x = np.arange(len(param_history))
+        diff_fig = plt.figure(1)
+        diff_ax = plt.axes()
+        # param_ax = param_fig.add_axes()
+        levels = param_history[0].levels
+        diff_fig.suptitle("Tendon Force Difference")
+        diff_ax.set_xlabel('Gradient Descent Step')
+        tendon_labels = [str(tendon) for tendon in self.tendons]
+        f_diff_array = np.array(f_tendon_diff_history)
+        for tendon_index, tendon_label in enumerate(tendon_labels):
+            # diff_ax.plot(x, f_tendon_diff_history[:, tendon_index], color=colors[tendon_index],
+            diff_ax.plot(x, f_diff_array[:, tendon_index], color=colors[tendon_index],
+                         marker=markers[tendon_index], label=tendon_label)
+        # legend_without_duplicate_labels(plt)
+        legend_without_duplicate_labels(diff_fig)
+        param_fig = plt.figure(2)
         param_ax = plt.axes()
+        # param_ax = param_fig.add_axes()
         levels = param_history[0].levels
         param_fig.suptitle("Parameters")
-        plt.xlabel('Gradient Descent Step')
-        x = np.arange(len(param_history))
-        # for p, p_label in zip(param_history[0].tune_param_array, param_history[0].tune_param_labels):
-        # for p_index, p_label in enumerate(param_history[0].tune_param_labels):
-        #     y = [params_of_t.tune_param_array[p_index] for params_of_t in ]
+        param_ax.set_xlabel('Gradient Descent Step')
 
-        for level, line_style in zip(range(levels), ['ro', 'bo', 'g0']):
-            level_twist = [params.level_twist for params in param_history]
-            param_ax.plot(x, level_twist, line_style, label="level twist" + str(level))
-        # for level in range(param_history[0].levels):
-        #     level_twist = [params.level_twist for params in param_history]
-        # param_ax.plot(x, level_twist)
-        # plt.legend(numpoints=1)
-        # handles, labels = plt.gca().get_legend_handles_labels()
-        # plt.legend()
-        legend_without_duplicate_labels(plt)
+        p_history_of_t = np.array([params.tune_param_array for params in param_history])
+        for p_index, p_label in enumerate(param_history[0].tune_param_labels):
+            # param_ax.plot(x, p_history_of_t[:, p_index], line_styles[p_index], label=p_label)
+            param_ax.plot(x, p_history_of_t[:, p_index], color=colors[p_index], marker=markers[p_index], label=p_label)
+        legend_without_duplicate_labels(param_fig)
         plt.show()
 
 
 class TowerTuneParams:
+    # todo add method of choosing which params to optimize
     def __init__(self, n, levels, height, radius, level_twist, interface_twist, interface_overlap, f_strut,
-                 f_interlayer_v_tendon):
+                 f_interlayer_v_tendon, tune_param_list):
         """ Stores prism tower parameters and provides several means of setting and accessing the parameters,
         including support for stability optimization """
         self.n = n
@@ -483,6 +497,10 @@ class TowerTuneParams:
         self.interface_overlap = interface_overlap
         self.f_strut = f_strut
         self.f_interlayer_v_tendon = f_interlayer_v_tendon
+        if False not in [p_name in self.p_names for p_name in tune_param_list]:
+            self.tune_param_list = tune_param_list
+        else:
+            raise Exception('tune_param_list elements must be contained in self.p_names')
         # Define the index offsets for use by set_tune_params
         self.radius_offset = 0
         r_len = self.levels - 1
@@ -497,6 +515,8 @@ class TowerTuneParams:
         self.f_interlayer_v_tendon_offset = self.f_strut_offset + f_strut_len
         f_v_tendon_len = self.levels - 1
         self.param_count = self.f_interlayer_v_tendon_offset + f_v_tendon_len
+        self.p_names = ['n', 'levels', 'height', 'radius', 'overlap radius', 'level_twist', 'interface twist',
+                        'interface overlap', 'strut force', 'interlayer tendon force']
 
     # def consistency_check(self):
     #     if len(height_list) != self.levels:
@@ -565,6 +585,7 @@ class TowerTuneParams:
 
     @property
     def print_tune(self):
+        # for p_index in
         print('overlap radius', [p for r_level in self.radius[1:] for p in r_level][::2])
         print('level twist', [math.degrees(tw) for tw in self.level_twist])
         print('interface twist', [math.degrees(itw) for itw in self.interface_twist])
@@ -574,7 +595,7 @@ class TowerTuneParams:
 
 
 def stabilize_tower_grad_descent(tower_params, learn_rate=0.001, max_steps=100, max_error=0.001, min_difference=1e-5,
-                                 epsilon=0.0001, verbose=False):
+                                 epsilon=0.0001, verbose=False, debug=False):
     """ Adjust the initial prism_tower parameters to achieve a stable structure using gradient descent"""
     # todo should we try tuning layer overlap, radius offset and all the twists first, and then forces?
     # todo provide message if solve fails for a vertex (give vertex and step?)
@@ -591,6 +612,8 @@ def stabilize_tower_grad_descent(tower_params, learn_rate=0.001, max_steps=100, 
     if success:
         while step < max_steps and abs(error_difference) > min_difference and abs(cost_history[-1]) > max_error:
             step += 1
+            if debug:
+                print('step ', step)
             # todo consider extracting the gradient from the previous two steps
             gradient = tower_gradient(param_history[step - 1], cost_history[step - 1], epsilon=epsilon)
             new_params = copy.copy(param_history[step - 1])
@@ -598,7 +621,8 @@ def stabilize_tower_grad_descent(tower_params, learn_rate=0.001, max_steps=100, 
             new_params.set_tune_params(param_history[step - 1].tune_param_array -
                                        gradient * learn_rate * param_history[step - 1].tune_param_array)
             param_history.extend([new_params])
-            cost, f_tendon_diff, success = Tensegrity(*prism_tower(*param_history[0].build_args), name='prism').cost()
+            cost, f_tendon_diff, success = \
+                Tensegrity(*prism_tower(*param_history[0].build_args), name='prism').cost()
             if not success:
                 break
             cost_history.extend([cost])
@@ -847,7 +871,7 @@ if __name__ == '__main__':
         # h_to_r = level_count * [3]
         h = level_count * [2]
         r = level_count * [[1, 1]]
-        if level_count > 2:
+        if level_count > 1:
             # r = [[1, 1], (level_count - 1) * [0.78, 1]]
             r = [[1, 1], (level_count - 1) * [0.8, 1]]
         l_twist = level_count * [math.pi * (1 / 2 - 1 / strut_count)]
@@ -863,13 +887,11 @@ if __name__ == '__main__':
         # t_params.print_tune
         thing = Tensegrity(*prism_tower(*t_params.build_args, verbose=False),
                            name='prism')
-
-        # thing.plot()
-
         param_hist, cost_hist, f_tendon_diff_hist, step, success = \
-            stabilize_tower_grad_descent(t_params, learn_rate=1e-6, max_steps=12, max_error=0.001, min_difference=1e-5,
+            stabilize_tower_grad_descent(t_params, learn_rate=1e-6, max_steps=27, max_error=0.001, min_difference=1e-5,
                                          epsilon=1e-6, verbose=True)
         thing.plot_gradient_descent(thing, param_hist, cost_hist, f_tendon_diff_hist)
+        # thing.plot()
         # print('*** initial cost', cost_hist[0])
         # param_hist[-1].print_tune
         # print('*** final cost', cost_hist[-1])
