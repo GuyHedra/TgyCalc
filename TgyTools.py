@@ -66,7 +66,7 @@ def vector_projection(projected_vector, unit_vector):
 
 
 def cartesian_coordinates(cyl_coords):
-    """ cylindrical are [rho(r), phi(azimuth), z]"""
+    """ cylindrical are [rho(radii), phi(azimuth), z]"""
     rho, phi, z = cyl_coords
     return [rho * math.cos(phi), rho * math.sin(phi), z]
 
@@ -108,7 +108,7 @@ class Vertex:
 
     @property
     def cyl_coordinates_rad(self):
-        """ returns [rho(r), phi(azimuth), z] """
+        """ returns [rho(radii), phi(azimuth), z] """
         x = self.coordinates[0]
         y = self.coordinates[1]
         z = self.coordinates[2]
@@ -118,7 +118,7 @@ class Vertex:
 
     @property
     def cyl_coordinates_deg(self):
-        """ returns [rho(r), phi(azimuth), z] """
+        """ returns [rho(radii), phi(azimuth), z] """
         x = self.coordinates[0]
         y = self.coordinates[1]
         z = self.coordinates[2]
@@ -395,11 +395,11 @@ class Tensegrity:
                       f'{heading_coord: <{array_3_width}}',
                       f'{"Force": <{array_3_width}}')
                 print(f'{" ": <{label_width}}',
-                      f'{"r   ": >{coord_width}}',
+                      f'{"radii   ": >{coord_width}}',
                       f'{"theta": >{coord_width}}',
                       f'{"z   ": >{coord_width}}',
                       " ",
-                      f'{"r   ": >{coord_width}}',
+                      f'{"radii   ": >{coord_width}}',
                       f'{"theta": >{coord_width}}',
                       f'{"z   ": >{coord_width}}')
                 for vertex in self.vertices:
@@ -412,11 +412,11 @@ class Tensegrity:
                       f'{heading_v1: <{array_3_width}}',
                       f'{"Force": <{array_3_width}}')
                 print(f'{" ": <{label_width}}',
-                      f'{"r   ": >{coord_width}}',
+                      f'{"radii   ": >{coord_width}}',
                       f'{"theta": >{coord_width}}',
                       f'{"z   ": >{coord_width}}',
                       " ",
-                      f'{"r   ": >{coord_width}}',
+                      f'{"radii   ": >{coord_width}}',
                       f'{"theta": >{coord_width}}',
                       f'{"z   ": >{coord_width}}')
                 for tendon in self.tendons:
@@ -435,11 +435,11 @@ class Tensegrity:
                       f'{"Force Vector": <{array_3_width}}',
                       )
                 print(f'{" ": <{label_width}}',
-                      f'{"r   ": >{coord_width}}',
+                      f'{"radii   ": >{coord_width}}',
                       f'{"theta": >{coord_width}}',
                       f'{"z   ": >{coord_width}}',
                       " ",
-                      f'{"r   ": >{coord_width}}',
+                      f'{"radii   ": >{coord_width}}',
                       f'{"theta": >{coord_width}}',
                       f'{"z   ": >{coord_width}}')
                 for strut in self.struts:

@@ -9,8 +9,9 @@ class TestTowerTuneParams(unittest.TestCase):
         strut_count = 3
         level_count = 2
         h = [1.1, 1.2]
-        # r = level_count * [[1, 1]]
-        r = [[1.3, 1.4], [1.5, 1.6]]
+        # radii = level_count * [[1, 1]]
+        # r = [[1.3, 1.4], [1.5, 1.6]]
+        r = [1.3, 1.4, 1.5, 1.6]
         # l_twist = level_count * [math.pi * (1 / 2 - 1 / strut_count)]
         l_twist = [3.1, 3.2]
         # iface_twist = (level_count - 1) * [math.pi / strut_count]
@@ -20,7 +21,11 @@ class TestTowerTuneParams(unittest.TestCase):
         f_interlayer_vertical_tendon = [6.1]
         t_params = forces.TowerTuneParams(n=strut_count, levels=level_count, height=h, radius=r, level_twist=l_twist,
                                           interface_twist=iface_twist, interface_overlap=iface_overlap, f_strut=f_strut,
-                                          f_interlayer_v_tendon=f_interlayer_vertical_tendon)
+                                          f_interlayer_v_tendon=f_interlayer_vertical_tendon,
+                                          tune_param_list=['overlap radius', 'level twist', 'interface twist',
+                                                           'interface overlap', 'strut force',
+                                                           'interlayer tendon force'])
+                                                           # 'interlayer tendon force', 'junk'])
         p_array = t_params.tune_param_array
         p_array += 0.1
         t_params.set_tune_params(p_array)
@@ -33,8 +38,8 @@ class TestTowerTuneParams(unittest.TestCase):
         strut_count = 3
         level_count = 3
         h = [1.1, 1.2, 1.3]
-        # r = level_count * [[1, 1]]
-        r = [[2.1, 2.2], [2.3, 2.4], [2.5, 2.6]]
+        # radii = level_count * [[1, 1]]
+        r = [2.1, 2.2, 2.3, 2.4, 2.5, 2.6]
         # l_twist = level_count * [math.pi * (1 / 2 - 1 / strut_count)]
         l_twist = [3.1, 3.2, 3.3]
         # iface_twist = (level_count - 1) * [math.pi / strut_count]
@@ -44,7 +49,10 @@ class TestTowerTuneParams(unittest.TestCase):
         f_interlayer_vertical_tendon = [6.1, 6.2]
         t_params = forces.TowerTuneParams(n=strut_count, levels=level_count, height=h, radius=r, level_twist=l_twist,
                                           interface_twist=iface_twist, interface_overlap=iface_overlap, f_strut=f_strut,
-                                          f_interlayer_v_tendon=f_interlayer_vertical_tendon)
+                                          f_interlayer_v_tendon=f_interlayer_vertical_tendon,
+                                          tune_param_list=['overlap radius', 'level twist', 'interface twist',
+                                                           'interface overlap', 'strut force',
+                                                           'interlayer tendon force'])
         p_array = t_params.tune_param_array
         p_array += 0.1
         t_params.set_tune_params(p_array)

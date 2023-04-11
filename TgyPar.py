@@ -142,7 +142,7 @@ class Vertex:
 
     @property
     def cyl_coordinates_deg(self):
-        """ returns [rho(r), phi(azimuth), z] """
+        """ returns [rho(radii), phi(azimuth), z] """
         x = self.coords[0]
         y = self.coords[1]
         z = self.coords[2]
@@ -463,11 +463,11 @@ class Tensegrity:
                   f'{heading_coord: <{array_3_width}}',
                   f'{"Force": <{array_3_width}}')
             print(f'{" ": <{label_width}}',
-                  f'{"r   ": >{coord_width}}',
+                  f'{"radii   ": >{coord_width}}',
                   f'{"theta": >{coord_width}}',
                   f'{"z   ": >{coord_width}}',
                   " ",
-                  f'{"r   ": >{coord_width}}',
+                  f'{"radii   ": >{coord_width}}',
                   f'{"theta": >{coord_width}}',
                   f'{"z   ": >{coord_width}}')
             for vertex in self.vertices:
@@ -486,11 +486,11 @@ class Tensegrity:
                   # f'{"Force": <{array_3_width}}'
                   )
             print(f'{" ": <{label_width}}',
-                  f'{"r   ": >{coord_width}}',
+                  f'{"radii   ": >{coord_width}}',
                   f'{"theta": >{coord_width}}',
                   f'{"z   ": >{coord_width}}',
                   " ",
-                  f'{"r   ": >{coord_width}}',
+                  f'{"radii   ": >{coord_width}}',
                   f'{"theta": >{coord_width}}',
                   f'{"z   ": >{coord_width}}')
             for tendon in self.tendons:
@@ -512,11 +512,11 @@ class Tensegrity:
                   # f'{"Force Vector": <{array_3_width}}',
                   )
             print(f'{" ": <{label_width}}',
-                  f'{"r   ": >{coord_width}}',
+                  f'{"radii   ": >{coord_width}}',
                   f'{"theta": >{coord_width}}',
                   f'{"z   ": >{coord_width}}',
                   " ",
-                  f'{"r   ": >{coord_width}}',
+                  f'{"radii   ": >{coord_width}}',
                   f'{"theta": >{coord_width}}',
                   f'{"z   ": >{coord_width}}')
             for strut in self.struts:

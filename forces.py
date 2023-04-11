@@ -116,8 +116,8 @@ def prism_tower(n=3, levels=2, height=[1, 1], radius=[[3, 3], [3, 3]], level_twi
     for level in range(levels):
         theta_array.extend([[[theta_start_array[level][layer] + i * theta_step for i in range(n)] for layer in [0, 1]]])
     # vtx_coords.shape is (2 * level * n, 3) where 3 is [x, y, z]
-    vertices = np.array([[radius[level, layer]*math.cos(theta_array[level][layer][i]),
-                          radius[level, layer]*math.sin(theta_array[level][layer][i]),
+    vertices = np.array([[radius[2 * level + layer]*math.cos(theta_array[level][layer][i]),
+                          radius[2 * level + layer]*math.sin(theta_array[level][layer][i]),
                           z_array[level][layer]] for level in range(levels) for layer in [0, 1] for i in range(n)])
     """ Some vtx_coords index offsets:
     1:e vertex in layer=0 (bottom layer) of level: 2 * level * n
@@ -243,7 +243,11 @@ class Tensegrity:
         for tendon in self.tendons:
             for i, vertex_index in enumerate(tendon):
                 vector = self.vtx_coords[tendon[(i + 1) % 2]] - self.vtx_coords[vertex_index]
-                self.vtx_f_unit_vectors[vertex_index].extend([vector / np.linalg.norm(vector)])
+                if np.linalg.norm(vector) <= 1e-15:
+                    print('*+*+ Warning tendon', tendon, 'has zero magnitude')
+                    self.vtx_f_unit_vectors[vertex_index].extend([vector])
+                else:
+                    self.vtx_f_unit_vectors[vertex_index].extend([vector / np.linalg.norm(vector)])
         # print(self.vtx_f_unit_vectors)
 
     def planarize_2_tendon_vertices(self):
@@ -306,8 +310,10 @@ class Tensegrity:
                 # get the vertex 1 force for this tendon
                 vtx1_force = vtx_tendon_forces[tendon[1]][vtx1_to_tendon_index]
                 f_diff_squared.extend(abs(vtx0_force - vtx1_force))
-        cost = np.sum(np.array(f_diff_squared))
-        return cost, f_diff_squared, vtf_success
+            cost = np.sum(np.array(f_diff_squared))
+            return cost, f_diff_squared, vtf_success
+        else:
+            return -1, -1, False
 
     def vtx_tendon_forces(self, vtx_index, verbose=False):
         """ Return the tendon forces on the vertex at vtx_index """
@@ -462,8 +468,8 @@ class Tensegrity:
         f_diff_array = np.array(f_tendon_diff_history)
         for tendon_index, tendon_label in enumerate(tendon_labels):
             # diff_ax.plot(x, f_tendon_diff_history[:, tendon_index], color=colors[tendon_index],
-            diff_ax.plot(x, f_diff_array[:, tendon_index], color=colors[tendon_index],
-                         marker=markers[tendon_index], label=tendon_label)
+            diff_ax.plot(np.arange(len(f_diff_array[:, tendon_index])), f_diff_array[:, tendon_index],
+                         color=colors[tendon_index], marker=markers[tendon_index], label=tendon_label)
         # legend_without_duplicate_labels(plt)
         legend_without_duplicate_labels(diff_fig)
         param_fig = plt.figure(2)
@@ -476,7 +482,8 @@ class Tensegrity:
         p_history_of_t = np.array([params.tune_param_array for params in param_history])
         for p_index, p_label in enumerate(param_history[0].tune_param_labels):
             # param_ax.plot(x, p_history_of_t[:, p_index], line_styles[p_index], label=p_label)
-            param_ax.plot(x, p_history_of_t[:, p_index], color=colors[p_index], marker=markers[p_index], label=p_label)
+            param_ax.plot(np.arange(len(p_history_of_t[:, p_index])), p_history_of_t[:, p_index], color=colors[p_index],
+                          marker=markers[p_index], label=p_label)
         legend_without_duplicate_labels(param_fig)
         plt.show()
 
@@ -497,52 +504,63 @@ class TowerTuneParams:
         self.interface_overlap = interface_overlap
         self.f_strut = f_strut
         self.f_interlayer_v_tendon = f_interlayer_v_tendon
-        if False not in [p_name in self.p_names for p_name in tune_param_list]:
+        self.p_names = ['n', 'levels', 'height', 'radius', 'overlap radius', 'level twist', 'interface twist',
+                        'interface overlap', 'strut force', 'interlayer tendon force']
+        # exclude n, levels, height and radius with [4:]
+        if False not in [p_name in self.p_names[4:] for p_name in tune_param_list]:
             self.tune_param_list = tune_param_list
         else:
-            raise Exception('tune_param_list elements must be contained in self.p_names')
-        # Define the index offsets for use by set_tune_params
-        self.radius_offset = 0
-        r_len = self.levels - 1
-        self.level_twist_offset = self.radius_offset + r_len
-        l_twist_len = self.levels
-        self.interface_twist_offset = self.level_twist_offset + l_twist_len
-        i_twist_len = self.levels - 1
-        self.interface_overlap_offset = self.interface_twist_offset + i_twist_len
-        i_overlap_len = self.levels - 1
-        self.f_strut_offset = self.interface_overlap_offset + i_overlap_len
-        f_strut_len = self.levels
-        self.f_interlayer_v_tendon_offset = self.f_strut_offset + f_strut_len
-        f_v_tendon_len = self.levels - 1
-        self.param_count = self.f_interlayer_v_tendon_offset + f_v_tendon_len
-        self.p_names = ['n', 'levels', 'height', 'radius', 'overlap radius', 'level_twist', 'interface twist',
-                        'interface overlap', 'strut force', 'interlayer tendon force']
-
-    # def consistency_check(self):
-    #     if len(height_list) != self.levels:
-    #         raise Exception('len(radius) must be 2 * levels')
-    #     if len(radius_list) != 2 * self.levels:
-    #         raise Exception('len(radius) must be 2 * levels')
-    #     if len(level_twist_list) != self.levels:
-    #         raise Exception('len(level_twist) must be 2 * levels')
-    #     if len(interface_twist_list) != self.levels - 1:
-    #         raise Exception('len(level_twist) must be 2 * levels')
-    #     if len(interface_overlap_list) != self.levels - 1:
-    #         raise Exception('len(level_twist) must be 2 * levels')
+            raise Exception('tune_param_list elements must be contained in self.p_names[3:]')
+        # Construct a dictionary of tune parameters: key = p_name, value = parameter
+        # append an index to the end of p_names for parameters that consist of lists
+        # self.tune_param_dict = {}
+        #
+        # # Define the index offsets for use by set_tune_params
+        # self.radius_offset = 0
+        # r_len = self.levels - 1
+        # self.level_twist_offset = self.radius_offset + r_len
+        # r_overlap_len = self.levels - 1
+        # l_twist_len = self.levels
+        # self.interface_twist_offset = self.level_twist_offset + l_twist_len
+        # i_twist_len = self.levels - 1
+        # self.interface_overlap_offset = self.interface_twist_offset + i_twist_len
+        # i_overlap_len = self.levels - 1
+        # self.f_strut_offset = self.interface_overlap_offset + i_overlap_len
+        # f_strut_len = self.levels
+        # self.f_interlayer_v_tendon_offset = self.f_strut_offset + f_strut_len
+        # f_v_tendon_len = self.levels - 1
+        # self.param_count = self.f_interlayer_v_tendon_offset + f_v_tendon_len
 
     def set_tune_params(self, p_list):
         """ set tune parameters to values in vector p_list """
-        # self.height = p_list[self.height_offset:self.radius_offset]
-        radius_list = p_list[self.radius_offset:self.level_twist_offset]
-        radius_by_level = [r_level for r_level in self.radius]
-        for level in range(1, self.levels):
-            radius_by_level[level][0] = radius_list[level - 1]
-        self.radius = [r_level for r_level in radius_by_level]
-        self.level_twist = p_list[self.level_twist_offset:self.interface_twist_offset]
-        self.interface_twist = p_list[self.interface_twist_offset:self.interface_overlap_offset]
-        self.interface_overlap = p_list[self.interface_overlap_offset:self.f_strut_offset]
-        self.f_strut = p_list[self.f_strut_offset:self.f_interlayer_v_tendon_offset]
-        self.f_interlayer_v_tendon = p_list[self.f_interlayer_v_tendon_offset:self.param_count]
+        p_list_ptr = 0
+        for p_name in self.tune_param_list:
+            if p_name == 'overlap radius':
+                for i in range(len(self.radius[2:][::2])):  # start with 2nd level and then take every other layer
+                    # self.radius[2:][::2][i] = p_list[p_list_ptr]
+                    self.radius[2 + 2 * i] = p_list[p_list_ptr]
+                    p_list_ptr += 1
+            # todo replace for loops below with list comprehensions
+            elif p_name == 'level twist':
+                for i in range(len(self.level_twist)):
+                    self.level_twist[i] = p_list[p_list_ptr]
+                    p_list_ptr += 1
+            elif p_name == 'interface twist':
+                for i in range(len(self.interface_twist)):
+                    self.interface_twist[i] = p_list[p_list_ptr]
+                    p_list_ptr += 1
+            elif p_name == 'interface overlap':
+                for i in range(len(self.interface_overlap)):
+                    self.interface_overlap[i] = p_list[p_list_ptr]
+                    p_list_ptr += 1
+            elif p_name == 'strut force':
+                for i in range(len(self.f_strut)):
+                    self.f_strut[i] = p_list[p_list_ptr]
+                    p_list_ptr += 1
+            elif p_name == 'interlayer tendon force':
+                for i in range(len(self.f_interlayer_v_tendon)):
+                    self.f_interlayer_v_tendon[i] = p_list[p_list_ptr]
+                    p_list_ptr += 1
 
     def set_single_tune_param(self, i, p):
         p_list = self.tune_param_array
@@ -561,32 +579,45 @@ class TowerTuneParams:
     @property
     def tune_param_array(self):
         """ return a vector containing all of the tower_prism tune parameters """
-        overlap_radius_list = [p for r_level in self.radius[1:] for p in r_level][::2]
-        level_twist_list = [tw for tw in self.level_twist]
-        interface_twist_list = [itw for itw in self.interface_twist]
-        interface_overlap_list = [io for io in self.interface_overlap]
-        f_strut_list = [fs for fs in self.f_strut]
-        f_interlayer_v_tendon_list = [ft for ft in self.f_interlayer_v_tendon]
-        return np.array(overlap_radius_list + level_twist_list + interface_twist_list + interface_overlap_list +
-                        f_strut_list + f_interlayer_v_tendon_list)
+        p_val_list = []
+        for p_name in self.tune_param_list:
+            if p_name == 'overlap radius':
+                p_val_list.extend(self.radius[2:][::2])
+            elif p_name == 'level twist':
+                p_val_list.extend(self.level_twist)
+            elif p_name == 'interface twist':
+                p_val_list.extend(self.interface_twist)
+            elif p_name == 'interface overlap':
+                p_val_list.extend(self.interface_overlap)
+            elif p_name == 'strut force':
+                p_val_list.extend(self.f_strut)
+            elif p_name == 'interlayer tendon force':
+                p_val_list.extend(self.f_interlayer_v_tendon)
+        return np.array(p_val_list)
 
     @property
     def tune_param_labels(self):
         """ return a list containing labels for each of the tower_prism tune parameters """
-        overlap_radius_list = ["overlap radius " + str(interface) for interface in range(self.levels - 1)]
-        level_twist_list = ["level twist " + str(level) for level in range(self.levels)]
-        interface_twist_list = ["interface twist " + str(interface) for interface in range(self.levels - 1)]
-        interface_overlap_list = ["interface overlap " + str(interface) for interface in range(self.levels - 1)]
-        f_strut_list = ["strut force " + str(level) for level in range(self.levels)]
-        f_interlayer_v_tendon_list = ["interlayer tendon force " + str(interface) for
-                                      interface in range(self.levels - 1)]
-        return np.array(overlap_radius_list + level_twist_list + interface_twist_list + interface_overlap_list +
-                        f_strut_list + f_interlayer_v_tendon_list)
+        p_label_list = []
+        for p_name in self.tune_param_list:
+            if p_name == 'overlap radius':
+                p_label_list.extend([p_name + ' ' + str(i) for i in range(self.levels - 1)])
+            elif p_name == 'level twist':
+                p_label_list.extend([p_name + ' ' + str(i) for i in range(self.levels)])
+            elif p_name == 'interface twist':
+                p_label_list.extend([p_name + ' ' + str(i) for i in range(self.levels - 1)])
+            elif p_name == 'interface overlap':
+                p_label_list.extend([p_name + ' ' + str(i) for i in range(self.levels - 1)])
+            elif p_name == 'strut force':
+                p_label_list.extend([p_name + ' ' + str(i) for i in range(self.levels)])
+            elif p_name == 'interlayer tendon force':
+                p_label_list.extend([p_name + ' ' + str(i) for i in range(self.levels - 1)])
+        return np.array(p_label_list)
 
     @property
     def print_tune(self):
         # for p_index in
-        print('overlap radius', [p for r_level in self.radius[1:] for p in r_level][::2])
+        print('overlap radius', [p for p in self.radius[2:][::2]])
         print('level twist', [math.degrees(tw) for tw in self.level_twist])
         print('interface twist', [math.degrees(itw) for itw in self.interface_twist])
         print('interface overlap', [io for io in self.interface_overlap])
@@ -594,7 +625,19 @@ class TowerTuneParams:
         print('interlayer vertical tendon force', [ft for ft in self.f_interlayer_v_tendon])
 
 
-def stabilize_tower_grad_descent(tower_params, learn_rate=0.001, max_steps=100, max_error=0.001, min_difference=1e-5,
+    # def consistency_check(self):
+    #     if len(height_list) != self.levels:
+    #         raise Exception('len(radius) must be 2 * levels')
+    #     if len(radius_list) != 2 * self.levels:
+    #         raise Exception('len(radius) must be 2 * levels')
+    #     if len(level_twist_list) != self.levels:
+    #         raise Exception('len(level_twist) must be 2 * levels')
+    #     if len(interface_twist_list) != self.levels - 1:
+    #         raise Exception('len(level_twist) must be 2 * levels')
+    #     if len(interface_overlap_list) != self.levels - 1:
+    #         raise Exception('len(level_twist) must be 2 * levels')
+
+def stabilize_tower_grad_descent(tower_params, learn_rate=0.001, max_steps=100, max_cost=0.001, min_difference=1e-5,
                                  epsilon=0.0001, verbose=False, debug=False):
     """ Adjust the initial prism_tower parameters to achieve a stable structure using gradient descent"""
     # todo should we try tuning layer overlap, radius offset and all the twists first, and then forces?
@@ -607,49 +650,61 @@ def stabilize_tower_grad_descent(tower_params, learn_rate=0.001, max_steps=100, 
     cost, f_tendon_diff, success = Tensegrity(*prism_tower(*param_history[0].build_args), name='prism').cost()
     cost_history.extend([cost])
     f_tendon_diff_history.extend([f_tendon_diff])
+    termination_code = 'none'
     step = 0
     error_difference = 2 * min_difference
     if success:
-        while step < max_steps and abs(error_difference) > min_difference and abs(cost_history[-1]) > max_error:
+        while step < max_steps and abs(error_difference) > min_difference and abs(cost_history[-1]) > max_cost:
             step += 1
             if debug:
                 print('step ', step)
             # todo consider extracting the gradient from the previous two steps
             gradient = tower_gradient(param_history[step - 1], cost_history[step - 1], epsilon=epsilon)
-            new_params = copy.copy(param_history[step - 1])
+            new_params = copy.deepcopy(param_history[step - 1])
             # new_params.set_tune_params(param_history[step - 1].tune_param_array -
             new_params.set_tune_params(param_history[step - 1].tune_param_array -
                                        gradient * learn_rate * param_history[step - 1].tune_param_array)
             param_history.extend([new_params])
             cost, f_tendon_diff, success = \
-                Tensegrity(*prism_tower(*param_history[0].build_args), name='prism').cost()
-            if not success:
+                Tensegrity(*prism_tower(*param_history[-1].build_args), name='prism').cost()
+                # Tensegrity(*prism_tower(*param_history[0].build_args), name='prism').cost()
+            if success:
+                cost_history.extend([cost])
+                f_tendon_diff_history.extend([f_tendon_diff])
+                error_difference = cost_history[step - 1] - cost_history[step]
+            else:
                 break
-            cost_history.extend([cost])
-            f_tendon_diff_history.extend([f_tendon_diff])
-            error_difference = cost_history[step - 1] - cost_history[step]
+        if step >= max_steps:
+            termination_code = 'max steps reached'
+        if abs(error_difference) <= min_difference:
+            termination_code = 'error difference <= min_difference'
+        if abs(cost_history[-1]) <= max_cost:
+            termination_code = 'cost < max cost'
+        if not success:
+            termination_code = 'force matrix solution failed'
         if verbose:
             # print('grad descent finished on step', step, 'with cost history', cost_history)
             print('*** initial parameters ***')
             param_history[0].print_tune
             print('*** initial cost', cost_history[0])
-            print('*** grad descent finished on step', step)
+            print('*** grad descent finished on step', step, 'with termination code:', termination_code)
             print('*** final cost', cost_history[-1])
             print('*** final params')
             param_history[-1].print_tune
-    return param_history, cost_history, f_tendon_diff_history, step, success
+
+    return param_history, cost_history, f_tendon_diff_history, step, termination_code
 
 
-def tower_gradient(tune_params, error_of_tune_params, epsilon):
-    error_of_x_plus_epsilon = np.zeros_like(tune_params.tune_param_array)
+def tower_gradient(tune_params, cost_of_tune_params, epsilon):
+    cost_of_x_plus_epsilon = np.zeros_like(tune_params.tune_param_array)
     for i, p in enumerate(tune_params.tune_param_array):
         # todo check to see if copy.copy is needed
-        t_params_w_epsilon = copy.copy(tune_params)
+        t_params_w_epsilon = copy.deepcopy(tune_params)
         t_params_w_epsilon.set_single_tune_param(i, p + epsilon)
             # np.sum(np.array(Tensegrity(*prism_tower(*t_params_w_epsilon.arguments).tendon_f_difference())))
-        error_of_x_plus_epsilon[i] = \
+        cost_of_x_plus_epsilon[i] = \
             np.sum(np.array(Tensegrity(*prism_tower(*t_params_w_epsilon.build_args), name='prism').cost()[0]))
-        gradient = (error_of_x_plus_epsilon - error_of_tune_params) / epsilon
+        gradient = (cost_of_x_plus_epsilon - cost_of_tune_params) / epsilon
     return gradient
 
 
@@ -844,14 +899,14 @@ if __name__ == '__main__':
         level_count = 2
         # h_to_r = level_count * [3]
         h = level_count * [1]
-        r = level_count * [[1, 1]]
+        radii = level_count * [[1, 1]]
         if level_count == 2:
-            r = [[1, 1], [0.8, 1]]
+            radii = [[1, 1], [0.8, 1]]
         l_twist = level_count * [math.pi * (1 / 2 - 1 / strut_count)]
         iface_twist = (level_count - 1) * [math.pi / strut_count]
         iface_overlap = (level_count - 1) * [0.3]
         # thing = Tensegrity(*prism_tower(verbose=True), name='prism')
-        thing = Tensegrity(*prism_tower(n=strut_count, levels=level_count, height=h, radius=r, level_twist=l_twist,
+        thing = Tensegrity(*prism_tower(n=strut_count, levels=level_count, height=h, radius=radii, level_twist=l_twist,
                                         interface_twist=iface_twist, interface_overlap=iface_overlap, verbose=False),
                            name='prism')
         # print('prism_tower vtx_coords:', thing.vtx_coords)
@@ -870,10 +925,10 @@ if __name__ == '__main__':
         level_count = 2
         # h_to_r = level_count * [3]
         h = level_count * [2]
-        r = level_count * [[1, 1]]
+        radii = level_count * [1, 1]
         if level_count > 1:
-            # r = [[1, 1], (level_count - 1) * [0.78, 1]]
-            r = [[1, 1], (level_count - 1) * [0.8, 1]]
+            # radii = [[1, 1], (level_count - 1) * [0.78, 1]]
+            radii = [1, 1] + (level_count - 1) * [0.8, 1]
         l_twist = level_count * [math.pi * (1 / 2 - 1 / strut_count)]
         iface_twist = (level_count - 1) * [math.pi / strut_count]
         # iface_overlap = (level_count - 1) * [0.25]
@@ -881,15 +936,19 @@ if __name__ == '__main__':
         frc_strut = [1.0, 1.1]
         f_interlayer_tendon = (level_count - 1) * [0.41]
 
-        t_params = TowerTuneParams(n=strut_count, levels=level_count, height=h, radius=r, level_twist=l_twist,
+        t_params = TowerTuneParams(n=strut_count, levels=level_count, height=h, radius=radii, level_twist=l_twist,
                                    interface_twist=iface_twist, interface_overlap=iface_overlap,
-                                   f_strut=frc_strut, f_interlayer_v_tendon=f_interlayer_tendon)
+                                   f_strut=frc_strut, f_interlayer_v_tendon=f_interlayer_tendon,
+                                   tune_param_list=['overlap radius', 'level twist', 'interface twist',
+                                                    # 'interface overlap', 'strut force',
+                                                    'interface overlap',
+                                                    'interlayer tendon force'])
         # t_params.print_tune
         thing = Tensegrity(*prism_tower(*t_params.build_args, verbose=False),
                            name='prism')
-        param_hist, cost_hist, f_tendon_diff_hist, step, success = \
-            stabilize_tower_grad_descent(t_params, learn_rate=1e-6, max_steps=27, max_error=0.001, min_difference=1e-5,
-                                         epsilon=1e-6, verbose=True)
+        param_hist, cost_hist, f_tendon_diff_hist, step, termination_msg = \
+            stabilize_tower_grad_descent(t_params, learn_rate=0.005, max_steps=100, max_cost=0.001, min_difference=1e-7,
+                                         epsilon=1e-5, verbose=True)
         thing.plot_gradient_descent(thing, param_hist, cost_hist, f_tendon_diff_hist)
         # thing.plot()
         # print('*** initial cost', cost_hist[0])
@@ -900,11 +959,10 @@ if __name__ == '__main__':
         level_count = 2
         # h_to_r = level_count * [3]
         h = level_count * [1]
-        r = level_count * [[1, 1]]
+        radii = level_count * [1, 1]
         # if level_count > 2:
         if level_count > 1:
-            # r = [[1, 1], (level_count - 1) * [0.78, 1]]
-            r = [[1, 1]] + (level_count - 1) * [[0.8, 1]]
+            radii = [1, 1] + (level_count - 1) * [0.8, 1]
         l_twist = level_count * [math.pi * (1 / 2 - 1 / strut_count)]
         iface_twist = (level_count - 1) * [1.2*(math.pi / strut_count)]
         # iface_twist = (level_count - 1) * [math.pi / strut_count]
@@ -913,9 +971,12 @@ if __name__ == '__main__':
         # frc_strut = level_count * [1.0]
         frc_strut = [1.0, 1.1]
         f_interlayer_tendon = (level_count - 1) * [0.41]
-        t_params = TowerTuneParams(n=strut_count, levels=level_count, height=h, radius=r, level_twist=l_twist,
+        t_params = TowerTuneParams(n=strut_count, levels=level_count, height=h, radius=radii, level_twist=l_twist,
                                    interface_twist=iface_twist, interface_overlap=iface_overlap,
-                                   f_strut=frc_strut, f_interlayer_v_tendon=f_interlayer_tendon)
+                                   f_strut=frc_strut, f_interlayer_v_tendon=f_interlayer_tendon,
+                                   tune_param_list=['overlap radius', 'level twist', 'interface twist',
+                                                    'interface overlap', 'strut force',
+                                                    'interlayer tendon force'])
 
         # t_params.print_tune
         # # stabilize_prism_tower(t_params)
