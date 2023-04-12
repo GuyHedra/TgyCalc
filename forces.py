@@ -476,7 +476,8 @@ class Tensegrity:
         plot_tendons = self.tendons[::self.n]  # For radially symmetric prism towers only plot every nth tendon
         # tendon_labels = [str(tendon) for tendon in self.tendons]
         tendon_labels = [str(tendon) for tendon in plot_tendons]
-        f_diff_array = np.array(f_tendon_diff_history)[::self.n]
+        # f_diff_array = np.array(f_tendon_diff_history)[::self.n]
+        f_diff_array = np.array([f_tendon_diff_of_t[::self.n] for f_tendon_diff_of_t in f_tendon_diff_history])
         for tendon_index, tendon_label in enumerate(tendon_labels):
             diff_ax.plot(np.arange(len(f_diff_array[:, tendon_index])), f_diff_array[:, tendon_index],
                          color=colors[tendon_index], marker=markers[tendon_index], label=tendon_label)
@@ -953,13 +954,15 @@ if __name__ == '__main__':
         # iface_overlap = (level_count - 1) * [0.25]
         iface_overlap = (level_count - 1) * [0.3]
         frc_strut = (level_count - 1) * [1.0, 1.1]
+        frc_strut = level_count * [1.0]
         f_interlayer_tendon = (level_count - 1) * [0.41]
         if strut_count == 3:
             learn_rate = 0.01
             learn_rate_damping = 0.9
         elif level_count > 2:
             learn_rate = 0.004
-            learn_rate_damping = 0.98
+            # learn_rate_damping = 0.98
+            learn_rate_damping = 0.9
         else:
             learn_rate = 0.005
             learn_rate_damping = 0.9
@@ -976,7 +979,7 @@ if __name__ == '__main__':
                            name='prism')
         param_hist, cost_hist, f_tendon_diff_hist, step, termination_msg = \
             stabilize_tower_grad_descent(t_params, learn_rate=learn_rate, learn_rate_damping=learn_rate_damping,
-                                         max_steps=500, max_cost=0.001, min_difference=1e-7, epsilon=1e-6, verbose=True)
+                                         max_steps=100, max_cost=0.001, min_difference=1e-7, epsilon=1e-7, verbose=True)
         thing.plot_gradient_descent(thing, param_hist, cost_hist, f_tendon_diff_hist)
         thing.plot()
         # print('*** initial cost', cost_hist[0])
