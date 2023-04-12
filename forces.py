@@ -246,7 +246,7 @@ class Tensegrity:
             else:
                 self.vtx_tendons[tendon[1]] = [i]
         # todo planarizing should not be necessary but does appear to be helpful. Decide to keep or drop planarization
-        self.planarize_2_tendon_vertices()
+        # self.planarize_2_tendon_vertices()
         """ We will use the convention that strut forces are positive and tendon forces are negative:
         For each vertex the sum of all forces is equal to 0 for a stable balanced tensegrity """
         """ Find the strut force vectors """
@@ -302,17 +302,17 @@ class Tensegrity:
     #     return all_forces
 
     def cost(self, verbose=False):
-    # def tendon_f_difference(self, unique=False, verbose=False):
         """ returns a list containing the difference between the forces at each end of each tendon in tendon index
         order
         if unique, return only unique differences by assuming that each nth tendon is unique"""
-        # vtx_tendon_forces = [self.vtx_tendon_forces(vtx_index)
-        #                      for vtx_index in range(len(self.vtx_coords))]
         vtx_tendon_forces = []
+        f_virtual = []
         for vtx_index in range(len(self.vtx_coords)):
             forces, vtf_success = self.vtx_tendon_forces(vtx_index)
             if vtf_success:
                 vtx_tendon_forces.extend([forces])
+                if len(self.vtx_tendons[vtx_index]) == 2:
+                    f_virtual.extend([forces[2]])
             else:
                 break
         if vtf_success:
@@ -329,12 +329,12 @@ class Tensegrity:
                 # get the vertex 1 force for this tendon
                 vtx1_force = vtx_tendon_forces[tendon[1]][vtx1_to_tendon_index]
                 # todo add a parameter 'cost_only' so we don't compute f_mean or return f_diff_square and f_mean while
-                # in an optimization loop unless desired
+                # todo in an optimization loop unless desired
                 # f_diff_squared.extend(abs(vtx0_force - vtx1_force))
                 f_diff_squared.extend((vtx0_force - vtx1_force) ** 2)
                 f_mean.extend((vtx0_force + vtx1_force) / 2)
-            cost = np.sum(np.array(f_diff_squared))
-            return cost, f_diff_squared, f_mean, vtf_success
+            cost = np.sum(np.array(f_diff_squared)) + np.sum(np.array(f_virtual) ** 2)
+            return cost, f_diff_squared, f_mean, f_virtual, vtf_success
         else:
             return -1, -1, -1, False
 
@@ -688,7 +688,7 @@ def stabilize_tower_grad_descent(tower_params, learn_rate=0.001, learn_rate_damp
     f_tendon_diff_history = []
     param_history = []
     param_history.extend([tower_params])
-    cost, f_tendon_diff, f_tendon, success = Tensegrity(*prism_tower(*param_history[0].build_args),
+    cost, f_tendon_diff, f_tendon, f_virtual, success = Tensegrity(*prism_tower(*param_history[0].build_args),
                                                         name='prism').cost()
     cost_history.extend([cost])
     f_tendon_diff_history.extend([f_tendon_diff])
@@ -711,9 +711,8 @@ def stabilize_tower_grad_descent(tower_params, learn_rate=0.001, learn_rate_damp
             new_params.set_tune_params(param_history[step - 1].tune_param_array -
                                        gradient * learn_rate * param_history[step - 1].tune_param_array)
             param_history.extend([new_params])
-            cost, f_tendon_diff, f_tendon, success = \
+            cost, f_tendon_diff, f_tendon, f_virtual, success = \
                 Tensegrity(*prism_tower(*param_history[-1].build_args), name='prism').cost()
-                # Tensegrity(*prism_tower(*param_history[0].build_args), name='prism').cost()
             if success:
                 cost_history.extend([cost])
                 f_tendon_diff_history.extend([f_tendon_diff])
@@ -987,7 +986,7 @@ if __name__ == '__main__':
         elif level_count > 2:
             learn_rate = 0.007
             # learn_rate_damping = 0.98
-            learn_rate_damping = 0.8
+            learn_rate_damping = 0.9
         else:
             learn_rate = 0.005
             learn_rate_damping = 0.9
@@ -1001,16 +1000,14 @@ if __name__ == '__main__':
                                                     'interlayer tendon force'])
         param_hist, cost_hist, f_tendon_diff_hist, end_step, termination_msg = \
             stabilize_tower_grad_descent(t_params, learn_rate=learn_rate, learn_rate_damping=learn_rate_damping,
-                                         max_steps=100, max_cost=0.001, min_difference=1e-7, epsilon=1e-7, verbose=True)
+                                         max_steps=200, max_cost=0.001, min_difference=1e-7, epsilon=1e-7, verbose=True)
         thing = Tensegrity(*prism_tower(*param_hist[-1].build_args, verbose=False),
                            name='prism')
-        final_cost, final_f_tendon_diff, final_f_tendon, final_success = thing.cost()
+        final_cost, final_f_tendon_diff, final_f_tendon, final_f_virtual, final_success = thing.cost()
         thing.print_tendon_forces(thing, final_f_tendon)
+        print('>>> f_virtual ', final_f_virtual)
         thing.plot_gradient_descent(thing, param_hist, cost_hist, f_tendon_diff_hist)
-        # thing.plot()
-        # print('*** initial cost', cost_hist[0])
-        # param_hist[-1].print_tune
-        # print('*** final cost', cost_hist[-1])
+        thing.plot()
     elif mode == 'stabilize prism tower n=4 levels=2':
         strut_count = 4
         level_count = 2
