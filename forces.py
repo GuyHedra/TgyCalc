@@ -3,7 +3,6 @@
 import numpy as np
 import math
 import copy
-import TgyPar as tp
 import matplotlib.pyplot as plt
 
 
@@ -16,82 +15,47 @@ def other_vtx_index(member, vertex_index):
         raise Exception('vertex_index not found in member')
 
 
-def check_force_vectors(f_vectors, verbose=False):
-    f_vector_sums = f_vectors.sum(0)
-    if verbose:
-        print('f_vector_sums', f_vector_sums)
-    return f_vector_sums
+# def prism1(n=3, hr_ratio=1, twist=math.pi / 2 - math.pi / 3, verbose=False):
+#     """ Implements a single level prism and associated functions for exploring stability space. """
+#     h = 1
+#     radius = h / hr_ratio
+#     vertices = []
+#     # create vtx_coords
+#     theta_step = 2 * math.pi / n
+#     for h, twist in zip([0, h], [0, twist]):
+#         vertices.extend([[radius * math.cos(i * theta_step + twist),
+#                           radius * math.sin(i * theta_step + twist), h] for i in range(n)])
+#     vertices = np.array(vertices)
+#     # struts
+#     # struts = [[v0, v1] for v0, v1 in zip(range(n), tp.rotate_list(list(range(n, 2*n)), -1))]
+#     struts = [[v0, v1] for v0, v1 in zip(range(n), np.roll(list(range(n, 2*n)), -1))]
+#     # bottom waist tendons
+#     tendons = [[v0, v1] for v0, v1 in zip(range(n), np.roll(list(range(n)), 1))]
+#     # top waist tendons
+#     tendons.extend([[v0, v1] for v0, v1 in zip(range(n, 2*n), np.roll(list(range(n, 2*n)), 1))])
+#     # vertical tendons
+#     tendons.extend([[v0, v1] for v0, v1 in zip(range(n), range(n, 2*n))])
+#     if verbose:
+#         print('vtx_coords', vertices)
+#         print('struts', struts)
+#         print('tendons', tendons)
+#     return vertices, struts, tendons
 
-
-def kite():
-    vertex_list = np.array([[1, 0, 0], [0, 1, 0], [-1, 0, 0], [0, -1, 0]])
-    strut_list = [[0, 2], [1, 3]]
-    tendon_list = [[0, 1], [1, 2], [2, 3], [3, 0]]
-    return vertex_list, strut_list, tendon_list
-
-
-def prism_n3(alpha=5 * math.pi / 6):
-    vertices = np.array([[math.cos(0), math.sin(0), 0],
-                      [math.cos(2*math.pi/3), math.sin(2*math.pi/3), 0],
-                      [math.cos(4 * math.pi / 3), math.sin(4 * math.pi / 3), 0],
-                      [math.cos(alpha), math.sin(alpha), 1],
-                      [math.cos(alpha + 2 * math.pi / 3), math.sin(alpha + 2 * math.pi / 3), 1],
-                      [math.cos(alpha + 4 * math.pi / 3), math.sin(alpha + 4 * math.pi / 3), 1]])
-    #these numbers are indicies in the vertex_list array for the vertex_list on either end of the member
-    compression_members = np.array([[0, 3],
-                                    [1, 4],
-                                    [2, 5]])
-    tension_members = np.array([[0, 1],
-                                [1, 2],
-                                [2, 0],
-                                [3, 4],
-                                [4, 5],
-                                [5, 3],
-                                [1, 3],
-                                [2, 4],
-                                [0, 5]])
-    return vertices, compression_members, tension_members
-
-
-def prism1(n=3, hr_ratio=1, twist=math.pi / 2 - math.pi / 3, verbose=False):
-    """ Implements a single level prism and associated functions for exploring stability space. """
-    h = 1
-    radius = h / hr_ratio
-    vertices = []
-    # create vtx_coords
-    theta_step = 2 * math.pi / n
-    for h, twist in zip([0, h], [0, twist]):
-        vertices.extend([[radius * math.cos(i * theta_step + twist),
-                          radius * math.sin(i * theta_step + twist), h] for i in range(n)])
-    vertices = np.array(vertices)
-    # struts
-    # struts = [[v0, v1] for v0, v1 in zip(range(n), tp.rotate_list(list(range(n, 2*n)), -1))]
-    struts = [[v0, v1] for v0, v1 in zip(range(n), np.roll(list(range(n, 2*n)), -1))]
-    # bottom waist tendons
-    tendons = [[v0, v1] for v0, v1 in zip(range(n), np.roll(list(range(n)), 1))]
-    # top waist tendons
-    tendons.extend([[v0, v1] for v0, v1 in zip(range(n, 2*n), np.roll(list(range(n, 2*n)), 1))])
-    # vertical tendons
-    tendons.extend([[v0, v1] for v0, v1 in zip(range(n), range(n, 2*n))])
-    if verbose:
-        print('vtx_coords', vertices)
-        print('struts', struts)
-        print('tendons', tendons)
-    return vertices, struts, tendons
-
-
-def prism_tower(n=3, levels=2, height=[1, 1], radius=[[3, 3], [3, 3]], level_twist=[math.pi*(1/2-1/3), math.pi*(1/2-1/3)],
-                interface_twist=[math.pi/3], interface_overlap=[0.2], f_strut=[1.0, 1.0], f_interlayer_v_tendon=[0.4],
-                verbose=False):
-    """ Returns a numpy array of vertex coordinates, a list of struts and a list of tendons
+# todo levels=1 crashes when optimized
+# def prism_tower(n=3, levels=2, height=[1, 1], radius=[[3, 3], [3, 3]], level_twist=[math.pi*(1/2-1/3), math.pi*(1/2-1/3)],
+#                 interface_twist=[math.pi/3], interface_overlap=[0.2], f_strut=[1.0, 1.0], f_interlayer_v_tendon=[0.4],
+#                 verbose=False):
+def prism_tower(n, levels, height, radius, level_twist, interface_twist, interface_overlap, f_strut,
+                f_interlayer_v_tendon, verbose=False):
+    """ Returns a numpy array of vertex coordinates, a list of struts, a list of tendons, a list of pre-determined
+        strut forces, a list of pre-determined tendon forces and a list of tendon_types
         len(hr_ratio) and len(level_twist) must both equal levels
         len(interface_twist) len(interface_overlap) must equal levels - 1
+        len( f_interlayer_v_tendon) must equal ceil((level_count - 1) / 2) since every other layer interface needs it
     """
     # todo should prism_tower be a class that inherits Tensegrity???
     # todo add choice of chirality [left, right, alternating starting with left, alternating starting with right]
     # todo add choice of skipping struts with inter-layer vertical struts for high n values to get a stiffer structure
-    # def strut_vertices(lvl, i):
-    #     return [2 * lvl * n + i, 2 * lvl * n + n + i]
     if not isinstance(height, np.ndarray):
         height = np.array(height)
     if not isinstance(radius, np.ndarray):
@@ -116,8 +80,8 @@ def prism_tower(n=3, levels=2, height=[1, 1], radius=[[3, 3], [3, 3]], level_twi
     for level in range(levels):
         theta_array.extend([[[theta_start_array[level][layer] + i * theta_step for i in range(n)] for layer in [0, 1]]])
     # vtx_coords.shape is (2 * level * n, 3) where 3 is [x, y, z]
-    vertices = np.array([[radius[2 * level + layer]*math.cos(theta_array[level][layer][i]),
-                          radius[2 * level + layer]*math.sin(theta_array[level][layer][i]),
+    vertices = np.array([[radius[2 * level + layer] * math.cos(theta_array[level][layer][i]),
+                          radius[2 * level + layer] * math.sin(theta_array[level][layer][i]),
                           z_array[level][layer]] for level in range(levels) for layer in [0, 1] for i in range(n)])
     """ Some vtx_coords index offsets:
     1:e vertex in layer=0 (bottom layer) of level: 2 * level * n
@@ -131,7 +95,7 @@ def prism_tower(n=3, levels=2, height=[1, 1], radius=[[3, 3], [3, 3]], level_twi
     #                    for level in range(levels)], dtype=int)
     struts = np.array([[[v0, v1] for v0, v1 in zip(range(2 * level * n, 2 * level * n + n),
                                                    np.roll(np.arange(2 * level * n + n, 2 * level * n + 2 * n,
-                                                           dtype=int), -1))]
+                                                                     dtype=int), -1))]
                        for level in range(levels)], dtype=int)
     f_struts = np.array([f_strut[level] for level in range(levels) for i in range(n)])
     # todo use struts as pointer to simplify the vertex index generation of the tendon
@@ -158,7 +122,7 @@ def prism_tower(n=3, levels=2, height=[1, 1], radius=[[3, 3], [3, 3]], level_twi
         # interface waist tendons
         interface_waist_tendons = np.empty([levels - 1, 2 * n, 2], dtype=int)
         interface_waist_ten_type = np.empty([levels - 1, 2 * n], dtype=object)
-        for interface_layer in range(levels-1):
+        for interface_layer in range(levels - 1):
             # interface_layer points to the level below the interface
             # create list of lower level and list of upper level vtx_coords
             upper_vertices = np.array([v for v in range(2 * interface_layer * n + n, 2 * interface_layer * n + 2 * n)],
@@ -187,13 +151,11 @@ def prism_tower(n=3, levels=2, height=[1, 1], radius=[[3, 3], [3, 3]], level_twi
             inter_layer_vertical_ten_type.fill('inter layer vertical: iface layer ' + str(interface_layer))
             if interface_layer % 2 == 0:  # only even interface layers get pre-assigned forces
                 f_inter_layer_vertical_tendons[interface_layer] = n * [f_interlayer_v_tendon[interface_layer]][0]
-        # f_inter_layer_vertical_tendons = np.array([f_interlayer_v_tendon[interface_layer]
-        #                                            for interface_layer in range(levels - 1) for i in range(n)])
         tendons = np.concatenate((cap_waist_tendons.reshape(-1, 2), intra_layer_vertical_tendons,
-                                 interface_waist_tendons.reshape(-1, 2), inter_layer_vertical_tendons.reshape(-1, 2)),
+                                  interface_waist_tendons.reshape(-1, 2), inter_layer_vertical_tendons.reshape(-1, 2)),
                                  axis=0)
         tendon_types = np.concatenate((cap_waist_ten_type.reshape(-1), intra_layer_vertical_ten_type,
-                                      interface_waist_ten_type.reshape(-1),
+                                       interface_waist_ten_type.reshape(-1),
                                        inter_layer_vertical_ten_type.reshape(-1)))
         f_tendons = np.concatenate((f_cap_waist_tendons, f_intra_layer_vertical_tendons,
                                     f_interface_waist_tendons,
@@ -207,10 +169,7 @@ def prism_tower(n=3, levels=2, height=[1, 1], radius=[[3, 3], [3, 3]], level_twi
         # print('vtx_coords', vtx_coords)
         print('struts', struts)
         print('tendons', tendons)
-    # vertex_list = vtx_coords.reshape(-1, 3)
-    # strut_list = struts.reshape(-1, 2)
-    # tendon_list = tendons.reshape(-1, 2)
-    # return vertex_list, strut_list, tendon_list
+    # todo add name as a return value (or better yet, make prism_tower a class that inherits Tensegrity)
     return n, vertices, struts.reshape(-1, 2), tendons.reshape(-1, 2), f_struts, f_tendons, tendon_types
 
 
@@ -245,18 +204,17 @@ class Tensegrity:
                 self.vtx_tendons[tendon[1]].extend([i])
             else:
                 self.vtx_tendons[tendon[1]] = [i]
-        # todo planarizing should not be necessary but does appear to be helpful. Decide to keep or drop planarization
-        # self.planarize_2_tendon_vertices()
-        """ We will use the convention that strut forces are positive and tendon forces are negative:
-        For each vertex the sum of all forces is equal to 0 for a stable balanced tensegrity """
+        """ We will use the convention that strut forces are directed towards the vertex and tendon forces are directed 
+        away from the vertex:
+        For each vertex the vector sum of all forces is equal to 0 for a balanced tensegrity """
         """ Find the strut force vectors """
         for strut in self.struts:
             for i, vertex_index in enumerate(strut):
                 if vertex_index in self.vtx_f_unit_vectors:
                     raise Exception('multiple struts are associated with vertex', vertex_index)
+                # todo use other_vtx_index function in line below and for tendon code below
                 vector = self.vtx_coords[vertex_index] - self.vtx_coords[strut[(i + 1) % 2]]
                 self.vtx_f_unit_vectors[vertex_index] = [vector / np.linalg.norm(vector)]
-        # print(self.vtx_f_unit_vectors)
         """ Find the tendon force vectors """
         for tendon in self.tendons:
             for i, vertex_index in enumerate(tendon):
@@ -266,45 +224,26 @@ class Tensegrity:
                     self.vtx_f_unit_vectors[vertex_index].extend([vector])
                 else:
                     self.vtx_f_unit_vectors[vertex_index].extend([vector / np.linalg.norm(vector)])
-        # print(self.vtx_f_unit_vectors)
-
-    def planarize_2_tendon_vertices(self):
-        """ The default prism tower set of vertical tendons creates a number of special case vertex_array that have
-             only two tendons.
-             It is necessary to ensure that these two tendons lie in a plane with the associated strut in order for the
-             structure to be conditionally stable."""
-        # todo put for loop into list comprehension
-        two_tendon_vertices = []
-        for vtx_index in range(len(self.vtx_coords)):
-            if len(self.vtx_tendons[vtx_index]) == 2:
-                two_tendon_vertices.extend([vtx_index])
-        for strut in self.struts:
-            if strut[0] in two_tendon_vertices and strut[1] in two_tendon_vertices:
-                raise Exception('Two-tendon vtx_coords on both ends of a strut is not supported')
-        for vtx_index in two_tendon_vertices:
-            pivot_vtx_index = other_vtx_index(self.struts[self.vtx_struts[vtx_index]], vtx_index)
-            tendon0 = self.tendons[self.vtx_tendons[vtx_index][0]]
-            tendon1 = self.tendons[self.vtx_tendons[vtx_index][1]]
-            adjacent_vtx0_index = other_vtx_index(tendon0, vtx_index)
-            adjacent_vtx1_index = other_vtx_index(tendon1, vtx_index)
-            midpoint = (self.vtx_coords[adjacent_vtx0_index] + self.vtx_coords[adjacent_vtx1_index]) / 2
-            new_strut_vector = midpoint - self.vtx_coords[pivot_vtx_index]
-            new_unit_vector = new_strut_vector / np.linalg.norm(new_strut_vector)
-            strut_length = np.linalg.norm(self.vtx_coords[vtx_index] - self.vtx_coords[pivot_vtx_index])
-            self.vtx_coords[vtx_index] = self.vtx_coords[pivot_vtx_index] + strut_length * new_unit_vector
-
-    # def all_vtx_forces(self, verbose=False):
-    #     all_forces = [self.vtx_tendon_forces(vtx_index)[1] for vtx_index in range(len(self.vtx_coords))]
-    #     if verbose:
-    #         print('All member force vectors by vertex')
-    #         for force in all_forces:
-    #             print(force)
-    #     return all_forces
 
     def cost(self, verbose=False):
-        """ returns a list containing the difference between the forces at each end of each tendon in tendon index
-        order
-        if unique, return only unique differences by assuming that each nth tendon is unique"""
+        """ Pre Determined Forces: Each vertex has one or more pre-determined forces such that a square full rank
+            matrix can represent all the forces in 3-space. Struts are always assigned a pre-determined force,
+            and when needed vertical interlayer tendons are also assigned a pre-determined force in order to produce
+            matrices that can be solved.
+            Virtual Tendons: Vertices that have only two tendons are assigned a virtual tendon. The virtual tendon
+            is the normalized cross product of the two real tendons. The square of the force of the virtual tendon
+            is added to the cost so that the optimization process drives the virtual tendon force to zero.
+            Force Differences: Once the unknown member force magnitudes have been found for all the vertices,
+            each real tendon will have two force magnitudes, one from each of the members
+            vertices. The force difference is the difference between these two forces.
+            Returns: cost: sum of squares of all real tendon force differences plus the sum of the squares of all the
+            virtual tendons.
+            f_diff_squared: a list of the square of the force magnitude differences for each tendon
+            f_mean: a list of the mean of the two force magnitudes for each tendon
+            f_virtual: a list of the force magnitudes for each virtual tendon
+            vtf_success: a boolean flag, True if all the force matrices described above were successfully solved
+        """
+        # Solve for the unknown forces at each vertex
         vtx_tendon_forces = []
         f_virtual = []
         for vtx_index in range(len(self.vtx_coords)):
@@ -315,6 +254,7 @@ class Tensegrity:
                     f_virtual.extend([forces[2]])
             else:
                 break
+        # Find the force differences and means
         if vtf_success:
             f_diff_squared = []
             f_mean = []
@@ -336,12 +276,10 @@ class Tensegrity:
             cost = np.sum(np.array(f_diff_squared)) + np.sum(np.array(f_virtual) ** 2)
             return cost, f_diff_squared, f_mean, f_virtual, vtf_success
         else:
-            return -1, -1, -1, False
+            return -1, -1, -1, -1, False
 
     def vtx_tendon_forces(self, vtx_index, verbose=False):
         """ Return the tendon forces on the vertex at vtx_index """
-        # f_strut = 1.0
-        # f_interlayer_vertical_tendon = f_interlayer_tendon_factor * f_strut
         a = np.column_stack([np.transpose(self.vtx_f_unit_vectors[vtx_index])])
         member_count = len(self.vtx_f_unit_vectors[vtx_index])
         if self.name == 'kite':
@@ -354,14 +292,10 @@ class Tensegrity:
                 useful matrix for the solver. We will add the magnitude of the force on said virtual tendon to
                 the cost (error) total so that the optimizer will drive it to zero. When the virtual tendon force
                 is zero, then the two real tendons lie in a plane with the strut as desired """
-                # todo add force on virtual tendon to cost (error)
                 virtual_tendon_vector = np.cross(self.vtx_f_unit_vectors[vtx_index][1],
                                                  self.vtx_f_unit_vectors[vtx_index][2])
                 virtual_tendon_unit_vec = virtual_tendon_vector / np.linalg.norm(virtual_tendon_vector)
-                # virtual_tendon_unit_vec = virtual_tendon_vector
-                # debug
                 a = np.column_stack((a, virtual_tendon_unit_vec))
-                # a = np.column_stack((a, virtual_tendon_unit_vec + 1))
                 a = np.vstack((a, [1] + member_count * [0]))
                 b = np.array(member_count * [[0.0]] + [[self.f_struts[self.vtx_struts[vtx_index]]]])
             elif member_count == 4:  # 1 strut, 3 tendons
@@ -382,7 +316,6 @@ class Tensegrity:
             if rank == a.shape[0]:
                 """ Solve the force matrix"""
                 x = np.linalg.solve(a, b)
-                # x = np.linalg.lstsq(a, b)
                 if verbose:
                     f_vectors = (a.T * x)[0:member_count, 0:3]
                     sum_f_vectors = np.sum(f_vectors, axis=0)
@@ -393,24 +326,14 @@ class Tensegrity:
                     print('f_vectors', f_vectors)
                     print('sum of force vectors', sum_f_vectors)
                     # print('total_tendon_forces', total_tendon_forces)
-                    if self.name == 'prism':
-                        # check to see if each of the two waist tendons have the same tension
-                        if math.isclose(x[1][0], x[2][0], abs_tol=10**-12):
-                            print('Prism is stable')
-                        else:
-                            print('Prism is unstable')
-                return x[1:], True   # skip the strut forces at x[0]
+                return x[1:], True  # skip the strut forces at x[0]
             else:
                 return None, False
 
     def plot(self, struts=True, tendons=True, lateral_f=False, vertex_f=False, axes=False, debug=False):
         """ plots tendons and struts using matplotlib """
 
-        # fig = plt.figure(figsize=(4, 4))
         ax = plt.axes(projection='3d')
-        # ax.set_xlim(-5, 5)
-        # ax.set_ylim(-5, 5)
-        # ax.set_zlim(0, 10)
         x_span = 2 * max(vertex[0] for vertex in self.vtx_coords) - 2 * min(vertex[0] for vertex in self.vtx_coords)
         y_span = 2 * max(vertex[1] for vertex in self.vtx_coords) - 2 * min(vertex[1] for vertex in self.vtx_coords)
         z_span = 2 * max(vertex[2] for vertex in self.vtx_coords) - 2 * min(vertex[2] for vertex in self.vtx_coords)
@@ -449,23 +372,23 @@ class Tensegrity:
             x = [vertex[0] for vertex in [vertex, strut_vector]]
             y = [vertex[1] for vertex in [vertex, strut_vector]]
             z = [vertex[2] for vertex in [vertex, strut_vector]]
-            # y = [vertex[1] for vertex in tendon.vtx_coords]
-            # z = [vertex[2] for vertex in tendon.vtx_coords]
             ax.plot3D(x, y, z, 'orange', linewidth=5)
-                      # *self.strut_list[0].position_vec(self.strut_list[0].vtx_coords[1]), 'green', linewidth=3)
+            # *self.strut_list[0].position_vec(self.strut_list[0].vtx_coords[1]), 'green', linewidth=3)
             tendon_vector = np.array(tendon.position_vec(tendon.other_vtx_index(vertex)))
             # ax.quiver(*vertex, *tendon_vector, color='orange', linewidth=3)
             tendon_strut_component = ((np.dot(tendon_vector, strut_vector) / np.linalg.norm(strut_vector) ** 2)
                                       * strut_vector)
-            # ax.quiver(*vertex, *tendon_strut_component, color='green', linewidth=3)
-            tendon_lateral_component = tendon_vector - tendon_strut_component
-            # ax.quiver(*vertex, *tendon_lateral_component, color='blue', linewidth=3)
-
-            # for vertex in self.vtx_coords[0:1]:
-            #     for tendon in vertex.tendon_list[0:1]:
-            #         radial_vec, strut_vec, tendon_vec, tendon_strut_component = vertex.tendon_radial_vec(tendon, debug=True)
-
         plt.show()
+
+    @staticmethod
+    def print_build(self):
+        """ Print the information needed to build the tensegrity """
+        # todo add strut to ground angle
+        # todo add tendon lengths (vtx to vtx, hub compensated and hook compensated)
+        vv_strut_lengths = [np.linalg.norm(self.vtx_coords[v0] - self.vtx_coords[v1])
+                            for v0, v1 in self.struts[::self.n]]
+        for length in vv_strut_lengths:
+            print('strut length ', length)
 
     @staticmethod
     def print_tendon_forces(self, f_tendon):
@@ -489,7 +412,6 @@ class Tensegrity:
                   'blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black',
                   'blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black',
                   'blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black']
-        # x = np.arange(len(param_history))
         # Tendon Force Differences
         diff_fig = plt.figure(1)
         diff_ax = plt.axes()
@@ -498,9 +420,7 @@ class Tensegrity:
         diff_fig.suptitle("Tendon Force Difference")
         diff_ax.set_xlabel('Gradient Descent Step')
         plot_tendons = self.tendons[::self.n]  # For radially symmetric prism towers only plot every nth tendon
-        # tendon_labels = [str(tendon) for tendon in self.tendons]
         tendon_labels = [str(tendon) for tendon in plot_tendons]
-        # f_diff_array = np.array(f_tendon_diff_history)[::self.n]
         f_diff_array = np.array([f_tendon_diff_of_t[::self.n] for f_tendon_diff_of_t in f_tendon_diff_history])
         for tendon_index, tendon_label in enumerate(tendon_labels):
             diff_ax.plot(np.arange(len(f_diff_array[:, tendon_index])), f_diff_array[:, tendon_index],
@@ -530,11 +450,11 @@ class Tensegrity:
 
 
 class TowerTuneParams:
-    # todo add method of choosing which params to optimize
     def __init__(self, n, levels, height, radius, level_twist, interface_twist, interface_overlap, f_strut,
                  f_interlayer_v_tendon, tune_param_list):
         """ Stores prism tower parameters and provides several means of setting and accessing the parameters,
         including support for stability optimization """
+        # todo add check for correct argument lengths and types
         self.n = n
         self.levels = levels
         # self.strut_length = strut_length  todo add support for strut_length
@@ -547,30 +467,11 @@ class TowerTuneParams:
         self.f_interlayer_v_tendon = f_interlayer_v_tendon
         self.p_names = ['n', 'levels', 'height', 'radius', 'overlap radius', 'level twist', 'interface twist',
                         'interface overlap', 'strut force', 'interlayer tendon force']
-        # exclude n, levels, height and radius with [4:]
+        # exclude n, levels, height and radius with self.p_names[4:]
         if False not in [p_name in self.p_names[4:] for p_name in tune_param_list]:
             self.tune_param_list = tune_param_list
         else:
             raise Exception('tune_param_list elements must be contained in self.p_names[3:]')
-        # Construct a dictionary of tune parameters: key = p_name, value = parameter
-        # append an index to the end of p_names for parameters that consist of lists
-        # self.tune_param_dict = {}
-        #
-        # # Define the index offsets for use by set_tune_params
-        # self.radius_offset = 0
-        # r_len = self.levels - 1
-        # self.level_twist_offset = self.radius_offset + r_len
-        # r_overlap_len = self.levels - 1
-        # l_twist_len = self.levels
-        # self.interface_twist_offset = self.level_twist_offset + l_twist_len
-        # i_twist_len = self.levels - 1
-        # self.interface_overlap_offset = self.interface_twist_offset + i_twist_len
-        # i_overlap_len = self.levels - 1
-        # self.f_strut_offset = self.interface_overlap_offset + i_overlap_len
-        # f_strut_len = self.levels
-        # self.f_interlayer_v_tendon_offset = self.f_strut_offset + f_strut_len
-        # f_v_tendon_len = self.levels - 1
-        # self.param_count = self.f_interlayer_v_tendon_offset + f_v_tendon_len
 
     def set_tune_params(self, p_list):
         """ set tune parameters to values in vector p_list """
@@ -578,7 +479,6 @@ class TowerTuneParams:
         for p_name in self.tune_param_list:
             if p_name == 'overlap radius':
                 for i in range(len(self.radius[2:][::2])):  # start with 2nd level and then take every other layer
-                    # self.radius[2:][::2][i] = p_list[p_list_ptr]
                     self.radius[2 + 2 * i] = p_list[p_list_ptr]
                     p_list_ptr += 1
             # todo replace for loops below with list comprehensions
@@ -612,10 +512,6 @@ class TowerTuneParams:
     def build_args(self):
         return self.n, self.levels, self.height, self.radius, self.level_twist, self.interface_twist, \
             self.interface_overlap, self.f_strut, self.f_interlayer_v_tendon
-
-    # @property
-    # def optimize_args(self):
-    #     return self.f_strut, self.f_interlayer_v_tendon
 
     @property
     def tune_param_array(self):
@@ -666,21 +562,9 @@ class TowerTuneParams:
         print('interlayer vertical tendon force', [ft for ft in self.f_interlayer_v_tendon])
 
 
-    # def consistency_check(self):
-    #     if len(height_list) != self.levels:
-    #         raise Exception('len(radius) must be 2 * levels')
-    #     if len(radius_list) != 2 * self.levels:
-    #         raise Exception('len(radius) must be 2 * levels')
-    #     if len(level_twist_list) != self.levels:
-    #         raise Exception('len(level_twist) must be 2 * levels')
-    #     if len(interface_twist_list) != self.levels - 1:
-    #         raise Exception('len(level_twist) must be 2 * levels')
-    #     if len(interface_overlap_list) != self.levels - 1:
-    #         raise Exception('len(level_twist) must be 2 * levels')
-
 def stabilize_tower_grad_descent(tower_params, learn_rate=0.001, learn_rate_damping=0.95, max_steps=100,
                                  max_cost=0.001, min_difference=1e-5, epsilon=0.0001, verbose=False, debug=False):
-    """ Adjust the initial prism_tower parameters to achieve a stable structure using gradient descent"""
+    """ Adjust the initial prism_tower parameters to achieve a stable structure using home-grown gradient descent"""
     # todo should we try tuning layer overlap, radius offset and all the twists first, and then forces?
     # todo provide message if solve fails for a vertex (give vertex and step?)
     tune_p_count = len(tower_params.tune_param_array)
@@ -689,7 +573,7 @@ def stabilize_tower_grad_descent(tower_params, learn_rate=0.001, learn_rate_damp
     param_history = []
     param_history.extend([tower_params])
     cost, f_tendon_diff, f_tendon, f_virtual, success = Tensegrity(*prism_tower(*param_history[0].build_args),
-                                                        name='prism').cost()
+                                                                   name='prism').cost()
     cost_history.extend([cost])
     f_tendon_diff_history.extend([f_tendon_diff])
     termination_code = 'none'
@@ -703,8 +587,6 @@ def stabilize_tower_grad_descent(tower_params, learn_rate=0.001, learn_rate_damp
             # todo consider extracting the gradient from the previous two steps
             gradient = tower_gradient(param_history[step - 1], cost_history[step - 1], epsilon=epsilon)
             new_params = copy.deepcopy(param_history[step - 1])
-            # new_params.set_tune_params(param_history[step - 1].tune_param_array -
-
             if len(cost_history) > 2 and cost_history[-1] > cost_history[-2]:
                 learn_rate = learn_rate_damping * learn_rate
 
@@ -746,224 +628,68 @@ def tower_gradient(tune_params, cost_of_tune_params, epsilon):
         # todo check to see if copy.copy is needed
         t_params_w_epsilon = copy.deepcopy(tune_params)
         t_params_w_epsilon.set_single_tune_param(i, p + epsilon)
-            # np.sum(np.array(Tensegrity(*prism_tower(*t_params_w_epsilon.arguments).tendon_f_difference())))
+        # np.sum(np.array(Tensegrity(*prism_tower(*t_params_w_epsilon.arguments).tendon_f_difference())))
         cost_of_x_plus_epsilon[i] = \
             np.sum(np.array(Tensegrity(*prism_tower(*t_params_w_epsilon.build_args), name='prism').cost()[0]))
         gradient = (cost_of_x_plus_epsilon - cost_of_tune_params) / epsilon
     return gradient
 
 
-# def stabilize_prism_tower(tower_params, verbose=True):
-#     """ Adjust the initial prism_tower parameters to achieve a stable structure """
-#     max_step_count = 1000
-#     epsilon_step = 0.005
-#     # epsilon_step = 0.1
-#     step_index = 0
-#     step_tower = Tensegrity(*prism_tower(*tower_params.build_args), name='prism')
-#     n = tower_params.n
-#     max_error_index = np.argmax(abs(np.array(step_tower.cost())))  # tendon index to largest error
-#     param_count = len(tower_params.tune_param_array)
-#     tendon_count = len(step_tower.tendons)
-#     error_history = np.empty(shape=[max_step_count, int(len(step_tower.tendons) / n)])
-#     param_history = np.empty(shape=[max_step_count, tower_params.param_count])
-#     param_history[step_index] = tower_params.tune_param_array
-#     error_history[step_index] = step_tower.cost()
-#     # print('error_history', error_history)
-#     # determine the total error sensitivity to each parameter
-#     step_params = copy.copy(tower_params)
-#     for step_index in range(max_step_count):
-#         # step_index += 1
-#         param_slopes = np.empty(shape=[param_count])
-#         sweep_params = copy.copy(step_params)
-#         for param_index in range(param_count):
-#             # Get a fresh copy of the original param_array in tower_params
-#             sweep_param_array = copy.copy(step_params.tune_param_array)
-#             sweep_param_array[param_index] = sweep_param_array[param_index] + epsilon_step
-#             sweep_params.set_tune_params(sweep_param_array)
-#             sweep_tower = Tensegrity(*prism_tower(*sweep_params.build_args), name='prism')
-#             # param_slopes[param_index] = (np.sum(abs(np.array(step_tower.tendon_f_difference()))) -
-#             #                              np.sum(abs(np.array(sweep_tower.tendon_f_difference())))) / epsilon_step
-#             param_slopes[param_index] = (np.array(step_tower.cost()[max_error_index]) -
-#                                          np.array(sweep_tower.cost()[max_error_index]) /
-#                                          epsilon_step)
-#         """ The best parameter is the one with the strongest correlation to the largest tendon error"""
-#         best_param_index = np.argmax(abs(param_slopes))
-#         # step = np.sum(abs(np.array(step_tower.tendon_f_difference()[max_error_index]))) / param_slopes[best_param_index]
-#         # step = step_tower.tendon_f_difference()[max_error_index] / param_slopes[best_param_index]
-#         step = np.sign(param_slopes[best_param_index]) * epsilon_step
-#         step_param_array = step_params.tune_param_array
-#         step_param_array[best_param_index] += step
-#         step_params.set_tune_params(step_param_array)
-#         step_tower = Tensegrity(*prism_tower(*step_params.build_args), name='prism')
-#         max_error_index = np.argmax(abs(np.array(step_tower.cost())))
-#         error_history[step_index] = sweep_tower.cost()
-#         param_history[step_index] = sweep_params.tune_param_array
-#         if verbose:
-#             print('step', step, 'max error', np.sum(step_tower.cost()[max_error_index]),
-#                   'slope', param_slopes[best_param_index])
-#             # print('param_slopes', param_slopes)
-#             # print('params', step_param_array)
-#             print('error sum', np.sum(abs(np.array(step_tower.cost()))),
-#                   'best_param_index', best_param_index, 'max_error_index', max_error_index)
-#         # todo calculate slope using sum of all errors
-#     print('stabilize finished')
-#     # slope = (np.sum(abs(error_history[step_index - 1])) / np.sum(abs(error_history[step_index]))) / epsilon_step
-#     # print('slope', slope)
-
-
-# def plot_prism1_stability_space(n=3):
-#     def waist_force_difference(hr_ratio, twist):
-#         t_forces = Tensegrity(*prism1(n=n, hr_ratio=hr_ratio, twist=twist), name='prism').vtx_tendon_forces(verbose=False)
-#         return t_forces[0][0] - t_forces[1][0]
-#     # twist_values = np.linspace(math.pi * (1/2 - 1/n - 1/4), math.pi * (1/2 - 1/n + 1/4), 11)
-#     twist_values = np.linspace(math.pi * (1/2 - 1/n - 1/10), math.pi * (1/2 - 1/n + 1/10), 21)
-#     hr_ratio_values = np.linspace(0.5, 3, 20)
-#     z_list = []
-#     for twist_value in twist_values:
-#         z_list.extend([waist_force_difference(hr_ratio=hr_ratio_value, twist=twist_value)
-#                        for hr_ratio_value in hr_ratio_values])
-#     twist_degrees = [math.degrees(twist_radians) for twist_radians in twist_values]
-#     x, y = np.meshgrid(hr_ratio_values, twist_degrees)
-#     z = np.array(z_list).reshape(x.shape)
-#     fig = plt.figure()
-#     ax = fig.add_subplot(111, projection='3d')
-#     ax.plot_wireframe(x, y, z)
-#     ax.set_xlabel('height:radius ratio')
-#     ax.set_ylabel('twist (degrees)')
-#     ax.set_zlabel('waist tendon difference')
-#     plt.show()
-
-
-def stabilize_prism1(n=3, verbose=False):
-    """ Practice function stabilizes a prism by searching for a twist (alpha) angle that stabilizes the prism """
-    min_step_size = math.pi/1000
-    max_step_count = 10
-    err_tol = 1e-7
-    initial_step_size = 10 * min_step_size
-    initial_twist = math.pi * (1 / 2 - 1 / n + 1/3)
-    prism = Tensegrity(*prism1(n=n, twist=initial_twist), name='prism')
-    t_forces = prism.vtx_tendon_forces()
-    error = t_forces[0][0] - t_forces[1][0]
-    error_history = [error]
-    step_count = 0
-    step_direction = 1
-    step = initial_step_size * step_direction
-    step_history = [step]
-    twist = initial_twist + step
-    slope_history = []
-    while abs(error) > err_tol and step_count < max_step_count:
-        t_forces = Tensegrity(*prism1(n=n, hr_ratio=1, twist=twist), name='prism').vtx_tendon_forces(verbose=False)
-        error = t_forces[0][0] - t_forces[1][0]
-        slope = (error_history[-1] - error) / step
-        error_history.append(error)
-        slope_history.append(slope)
-        step = error / slope
-        step_history.append(step)
-        twist = twist + step
-        step_count += 1
-    if verbose:
-        print('error history', error_history)
-        print('step history', step_history)
-        print('slope_history', slope_history)
-        print('step_count', step_count)
-        if abs(error) < err_tol:
-            print('*** Stabilization Successful ***')
-        else:
-            print('*** Stabilization Failed ***')
-        print('twist', math.degrees(twist), '\nwaist tendon force error', error)
-    return twist
-
 if __name__ == '__main__':
-    # mode = 'kite'
-    # mode = 'prism1'  # builds single level prism using n, hr_ratio and twist
-    # mode = 'prism tower'
-    mode = 'stabilize prism tower n=3 levels=2'
-    # mode = 'stabilize prism tower n=4 levels=2'
-    # mode = 'stabilize prism1'
-    # mode = 'prism1 stability sweep'  # sweep twist and hr ratio, plot difference in waist tendon forces
-    # mode = 'prism'
-    # mode = 'unstable prism'
-    # mode = 'tp prism'
-    # mode = 'tp prism sweep hr ratio'
-    if mode == 'kite':
-        thing = Tensegrity(*kite(), mode)
-        thing.vtx_tendon_forces()
-    elif mode == 'stabilize prism1':
-        stabilize_prism1(n=5, verbose=True)
-    elif mode == 'prism1 stability sweep':
-        plot_prism1_stability_space(n=4)
-        # # thing = Prism1(n=3, hr_ratio=1, twist=math.pi / 2 - math.pi / 3)
-        # n = 3
-        # for twist in (math.pi / 2 - math.pi / n) * np.array([0.9, 1, 1.1]):
-        #     for hr_ratio in [1, 2, 3]:
-        #         thing = Tensegrity(*prism1(n=3, hr_ratio=hr_ratio, twist=twist), name='prism')
-        #         t_forces = thing.tendon_forces(verbose=False)
-        #         # print('t_forces', t_forces)
-        #         print('hr_ratio', hr_ratio, 'waist force difference', t_forces[0][0] - t_forces[1][0])
-        # # thing.plot()
-    elif mode == 'prism1':
-        # thing = Prism1(n=3, hr_ratio=1, twist=math.pi / 2 - math.pi / 3)
-        # thing = Tensegrity(*prism1(n=3, hr_ratio=2, twist=math.pi / 2 - math.pi / 3), name='prism')
-        strut_count = 6
-        thing = Tensegrity(*prism1(n=strut_count, hr_ratio=2, twist=math.pi / 2 - math.pi / strut_count), name='prism')
-        thing.plot()
-        thing.vtx_tendon_forces(verbose=True)
-    elif mode == 'prism':
-        thing = Tensegrity(*prism_n3(), mode)
-        print('prism_n3 vtx_coords:', thing.vtx_coords)
-        thing.plot()
-        thing.vtx_tendon_forces(verbose=True)
-    elif mode == 'unstable prism':
-        thing = Tensegrity(*prism_n3(alpha=5 * math.pi / 6 + 0.01), name='prism')
-        # thing = Tensegrity(*prism(alpha=5*math.pi/6), name='prism')
-        thing.vtx_tendon_forces(verbose=True)
-    elif mode == 'tp prism':
-        """ Use TgyPar code to generate tensegrity and find forces """
-        tp_thing = tp.PrismTower(n=3, levels=1, radii=[5, 5], heights=[10])
-        thing = Tensegrity(tp_thing.get_vertices(), tp_thing.get_struts(), tp_thing.get_tendons(), name='prism')
-    elif mode == 'tp prism sweep hr ratio':
-        """ Use TgyPar code to generate tensegrity and find forces 
-            Sweep height to radius ratio and write csv file with tendon forces as a fraction of strut force """
-        force_file = open('C:/Users/guyde/PycharmProjects/TgyCalc/forces.csv', 'w')
-        force_file.write('Ratio, Waist Tendon Tension, Vertical Tendon Tension, Waist:Vertical Tendon Tension,' +
-                         ' Strut Tension \n')
-        for ratio in [0.1, 0.25, 0.5, 0.85, 1, 2, 3, 5, 10, 20, 50, 100]:
-            tp_thing = tp.PrismTower(n=3, levels=1, radii=[5, 5], heights=[5 * ratio])
-            thing = Tensegrity(tp_thing.get_vertices(), tp_thing.get_struts(), tp_thing.get_tendons(), name='prism')
-            tendon_forces = thing.vtx_tendon_forces()
-            print(tendon_forces)
-            print(tendon_forces[0][0])
-            print(tendon_forces[2][0])
-            force_file.write(str(ratio) + ', ' + str(tendon_forces[0][0]) + ', ' + str(tendon_forces[2][0]) + ', ' +
-                             str(tendon_forces[0][0] / tendon_forces[2][0]) + ', 1 ' + str('\n'))
-        force_file.close()
-    elif mode == 'prism tower':
-        strut_count = 3
-        level_count = 2
+    mode = 'stabilize prism tower'
+    # mode = 'hat rack 1.0'
+    if mode == 'hat rack 1.0':
+        """ hourglass shaped hat rack """
+        strut_count = 4
+        level_count = 3
         # h_to_r = level_count * [3]
-        h = level_count * [1]
-        radii = level_count * [[1, 1]]
-        if level_count == 2:
-            radii = [[1, 1], [0.8, 1]]
+        dowel_length = 915  # in mm 1/2" wood dowel 36"
+        bottom_extension = 30  # mm measured from tip of dowel to inside of hub (includes hub length)
+        bot_layer_top_extension = 250
+        mid_layer_top_extension = 250
+        top_layer_top_extension = 200
+        vv_bot_layer = dowel_length - bottom_extension - bot_layer_top_extension  # vv denotes vertex to vertex len
+        vv_mid_layer = dowel_length - bottom_extension - mid_layer_top_extension
+        vv_top_layer = dowel_length - bottom_extension - top_layer_top_extension
+        print('vv_bot_layer:', vv_bot_layer, 'vv_mid_layer:', vv_mid_layer, 'vv_top_layer:', vv_top_layer)
+        reference_radius = (vv_bot_layer / 2) * (635 / 887)  # fudge factor from trial run
+        r_off = 0.3 * reference_radius
+        radii = [1.1 * reference_radius + r_off, reference_radius - r_off] + \
+                [reference_radius - r_off, reference_radius - r_off] + \
+                [reference_radius - r_off, reference_radius + r_off]
+        h = [2 * reference_radius * (635 / 627),
+             (2 * reference_radius) * (635 / 545.3) * (635 / 610),
+             (2 * reference_radius) * (685 / 630) * (685 / 673)]
+
         l_twist = level_count * [math.pi * (1 / 2 - 1 / strut_count)]
         iface_twist = (level_count - 1) * [math.pi / strut_count]
-        iface_overlap = (level_count - 1) * [0.3]
-        # thing = Tensegrity(*prism_tower(verbose=True), name='prism')
-        thing = Tensegrity(*prism_tower(n=strut_count, levels=level_count, height=h, radius=radii, level_twist=l_twist,
-                                        interface_twist=iface_twist, interface_overlap=iface_overlap, verbose=False),
+        # iface_overlap = (level_count - 1) * [0.25]
+        iface_overlap = (level_count - 1) * [0.35]
+        # frc_strut = (level_count - 1) * [1.0, 1.1]
+        frc_strut = level_count * [1.0]
+        f_interlayer_tendon = math.ceil((level_count - 1) / 2) * [0.2]  # interfaces 0, 2, 4... get f_interlayer_tendon
+        learn_rate = 0.006
+        # learn_rate_damping = 0.98
+        learn_rate_damping = 0.97
+        t_params = TowerTuneParams(n=strut_count, levels=level_count, height=h, radius=radii, level_twist=l_twist,
+                                   interface_twist=iface_twist, interface_overlap=iface_overlap,
+                                   f_strut=frc_strut, f_interlayer_v_tendon=f_interlayer_tendon,
+                                   tune_param_list=['overlap radius', 'level twist', 'interface twist',
+                                                    # 'interface overlap', 'strut force',
+                                                    'interface overlap',
+                                                    'interlayer tendon force'])
+        param_hist, cost_hist, f_tendon_diff_hist, end_step, termination_msg = \
+            stabilize_tower_grad_descent(t_params, learn_rate=learn_rate, learn_rate_damping=learn_rate_damping,
+                                         max_steps=200, max_cost=0.001, min_difference=1e-7, epsilon=1e-7, verbose=True)
+        thing = Tensegrity(*prism_tower(*param_hist[-1].build_args, verbose=False),
                            name='prism')
-        # print('prism_tower vtx_coords:', thing.vtx_coords)
+        final_cost, final_f_tendon_diff, final_f_tendon, final_f_virtual, final_success = thing.cost()
+        thing.print_tendon_forces(thing, final_f_tendon)
+        print('>>> f_virtual ', final_f_virtual)
+        thing.print_build(thing)
+        # thing.plot_gradient_descent(thing, param_hist, cost_hist, f_tendon_diff_hist)
         # thing.plot()
-        # x_array, force_vector = thing.vtx_forces(vtx_index=3, verbose=True)
-        # x_array, force_vector = thing.vtx_forces(vtx_index=6, verbose=False)
-        # thing.all_vtx_forces(verbose=True)
-        thing.cost(verbose=True)
-
-        # x_array, force_vector = thing.vtx_forces(vtx_index=9, verbose=True)
-        # forces, force_vectors = thing.all_vtx_forces(verbose=False)
-        # check_force_vectors(force_vectors, verbose=True)
-        # check_force_vectors(thing.vtx_forces(), verbose=True)
-    elif mode == 'stabilize prism tower n=3 levels=2':
+    elif mode == 'stabilize prism tower':
         strut_count = 4
         level_count = 3
         # h_to_r = level_count * [3]
@@ -989,8 +715,8 @@ if __name__ == '__main__':
             learn_rate_damping = 0.9
         else:
             learn_rate = 0.005
-            learn_rate_damping = 0.9
-# todo report initial and final learn rates (plot them?)
+            learn_rate_damping = 0.99
+        # todo report initial and final learn rates (plot them?)
         t_params = TowerTuneParams(n=strut_count, levels=level_count, height=h, radius=radii, level_twist=l_twist,
                                    interface_twist=iface_twist, interface_overlap=iface_overlap,
                                    f_strut=frc_strut, f_interlayer_v_tendon=f_interlayer_tendon,
@@ -1008,32 +734,3 @@ if __name__ == '__main__':
         print('>>> f_virtual ', final_f_virtual)
         thing.plot_gradient_descent(thing, param_hist, cost_hist, f_tendon_diff_hist)
         thing.plot()
-    elif mode == 'stabilize prism tower n=4 levels=2':
-        strut_count = 4
-        level_count = 2
-        # h_to_r = level_count * [3]
-        h = level_count * [1]
-        radii = level_count * [1, 1]
-        # if level_count > 2:
-        if level_count > 1:
-            radii = [1, 1] + (level_count - 1) * [0.8, 1]
-        l_twist = level_count * [math.pi * (1 / 2 - 1 / strut_count)]
-        iface_twist = (level_count - 1) * [1.2 * (math.pi / strut_count)]
-        # iface_twist = (level_count - 1) * [math.pi / strut_count]
-        # iface_overlap = (level_count - 1) * [0.23]
-        iface_overlap = (level_count - 1) * [0.2]
-        # frc_strut = level_count * [1.0]
-        frc_strut = [1.0, 1.1]
-        f_interlayer_tendon = (level_count - 1) * [0.41]
-        t_params = TowerTuneParams(n=strut_count, levels=level_count, height=h, radius=radii, level_twist=l_twist,
-                                   interface_twist=iface_twist, interface_overlap=iface_overlap,
-                                   f_strut=frc_strut, f_interlayer_v_tendon=f_interlayer_tendon,
-                                   tune_param_list=['overlap radius', 'level twist', 'interface twist',
-                                                    'interface overlap', 'strut force',
-                                                    'interlayer tendon force'])
-
-        # t_params.print_tune
-        # # stabilize_prism_tower(t_params)
-        # # params = stabilize_tower_grad_descent(t_params, learn_rate=0.001, max_steps=100)
-        # params = stabilize_tower_grad_descent(t_params, learn_rate=0.001, max_steps=500)
-        # params.print_tune
