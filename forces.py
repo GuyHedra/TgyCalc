@@ -4,6 +4,7 @@ import numpy as np
 import math
 import copy
 import matplotlib.pyplot as plt
+import pandas as pd
 
 
 def other_vtx_index(member, vertex_index):
@@ -381,14 +382,124 @@ class Tensegrity:
         plt.show()
 
     @staticmethod
-    def print_build(self):
+    def print_build_pandas(thing, params):
+        pd.options.display.float_format = '{:.3f}'.format
+        struts = thing.struts[::thing.n]  # Don't need all the struts for radially symmetric thing
+        vv_strut_lengths = np.array([np.linalg.norm(thing.vtx_coords[v0] - thing.vtx_coords[v1])
+                                     for v0, v1 in thing.struts[::thing.n]])
+        strut_vectors = np.array([thing.vtx_coords[v1] - thing.vtx_coords[v0] for v0, v1 in struts])
+        strut_unit_vectors = [strut_vector / length for strut_vector, length in zip(strut_vectors, vv_strut_lengths)]
+        strut_unit_xy_projections = np.array([np.array([strut_vector[0], strut_vector[1], 0]) / vv_strut_length
+                                              for strut_vector, vv_strut_length
+                                              in zip(strut_vectors, vv_strut_lengths)])
+        # strut_unit_xy_projections = strut_xy_projections / np.linalg.norm(strut_xy_projections)
+        strut_elev_angle = [math.degrees(math.acos(np.dot(s_vec, s_proj)))
+                            for s_vec, s_proj in zip(strut_unit_vectors, strut_unit_xy_projections)]
+        df_struts = pd.DataFrame(
+            {
+                "level": np.arange(params.levels),
+                "vv length": vv_strut_lengths,
+                "elevation angle": strut_elev_angle,
+            }
+        )
+        print(df_struts)
+
+    @staticmethod
+    def print_build(thing, print_struts=True, print_tendons=True, print_vertices=False):
         """ Print the information needed to build the tensegrity """
         # todo add strut to ground angle
         # todo add tendon lengths (vtx to vtx, hub compensated and hook compensated)
-        vv_strut_lengths = [np.linalg.norm(self.vtx_coords[v0] - self.vtx_coords[v1])
-                            for v0, v1 in self.struts[::self.n]]
-        for length in vv_strut_lengths:
-            print('strut length ', length)
+        struts = thing.struts[::thing.n]  # Don't need all the struts for radially symmetric thing
+        vv_strut_lengths = np.array([np.linalg.norm(thing.vtx_coords[v0] - thing.vtx_coords[v1])
+                                     for v0, v1 in thing.struts[::thing.n]])
+        # for length in vv_strut_lengths:
+        #     print('strut length ', length)
+
+        np.set_printoptions(formatter={'float': '{: 10.3f}'.format}, suppress=True)
+        # type_width = len('vertex')
+        coord_width = 10  # make this equal to the width specifier in set_printoptions call above
+        array_3_width = 3 * coord_width + 4  # + 4 to account for two space and two brackets
+        number_width = 11
+        precision = 3
+        label_vertex = 'Vertex'
+        label_tendon = 'Tendon'
+        label_strut = 'Strut'
+        label_element = 'Element'
+        label_width = max([len(e)
+                           for e in [label_vertex, label_tendon, label_strut, label_element]]) + 1
+        # heading_coord = 'Coordinates'
+        # heading_v0 = f'V0 {heading_coord}'
+        # heading_v1 = f'V1 {heading_coord}'
+        # if vertices:
+        #     print(f'{"Element": <{label_width}}',
+        #           f'{heading_coord: <{array_3_width}}',
+        #           f'{"Force": <{array_3_width}}')
+        #     print(f'{" ": <{label_width}}',
+        #           f'{"radii   ": >{coord_width}}',
+        #           f'{"theta": >{coord_width}}',
+        #           f'{"z   ": >{coord_width}}',
+        #           " ",
+        #           f'{"radii   ": >{coord_width}}',
+        #           f'{"theta": >{coord_width}}',
+        #           f'{"z   ": >{coord_width}}')
+        #     for vertex in thing.vertices:
+        #         print(f'{label_vertex: <{label_width}}',
+        #               f'{str(np.array(vertex.cyl_coordinates_deg)): <{array_3_width}}',
+        #               # f'{str(np.around(np.array(vertex.f_vector), precision)): <{array_3_width}}'
+        #               )
+        if print_tendons:
+            pass
+            # print(f'{"Element": <{label_width}}',
+            #       f'{heading_v0: <{array_3_width}}',
+            #       f'{heading_v1: <{array_3_width}}',
+            #       f'{"type": <{label_width}}',
+            #       f'{"targ len": <{number_width}}',
+            #       f'{"curr len": <{number_width}}',
+            #       # f'{heading_v1: <{array_3_width}}',
+            #       # f'{"Force": <{array_3_width}}'
+            #       )
+            # print(f'{" ": <{label_width}}',
+            #       f'{"radii   ": >{coord_width}}',
+            #       f'{"theta": >{coord_width}}',
+            #       f'{"z   ": >{coord_width}}',
+            #       " ",
+            #       f'{"radii   ": >{coord_width}}',
+            #       f'{"theta": >{coord_width}}',
+            #       f'{"z   ": >{coord_width}}')
+            # for tendon in thing.tendons:
+            #     vertex0 = tendon.vtx_coords[0]
+            #     vertex1 = tendon.vtx_coords[1]
+            #     print(f'{"Tendon": <{label_width}}',
+            #           f'{str(np.array(vertex0.cyl_coordinates_deg)): <{array_3_width}}',
+            #           f'{str(np.array(vertex1.cyl_coordinates_deg)): <{array_3_width}}',
+            #           f'{tendon.tendon_type: <{label_width}}'
+            #           f'{str(round(tendon.targ_length, precision)): <{number_width}}'
+            #           f'{str(round(tendon.curr_length, precision)): <{number_width}}'
+            #           # f'{str(round(tendon.spring_f_mag, precision)): <{number_width}}'
+            #           )
+        if print_struts:
+            print(f'{"Struts": <{label_width}}',
+                  # f'{heading_v0: <{array_3_width}}',
+                  # f'{heading_v1: <{array_3_width}}',
+                  # f'{"Twist": <{number_width}}',
+                  # f'{"Force Vector": <{array_3_width}}',
+                  )
+            print(f'{" ": <{label_width}}',
+                  f'{"level   ": >{number_width}}',
+                  f'{"vv length": >{number_width}}',
+                  f'{"elev angle": >{number_width}}',
+                  # " ",
+                  # f'{"radii   ": >{coord_width}}',
+                  # f'{"theta": >{coord_width}}',
+                  # f'{"z   ": >{coord_width}}'
+                  )
+            for i, strut in enumerate(struts):
+                print(f'{"Strut": <{label_width}}',
+                      f'{str(np.array(vv_strut_lengths[i])): <{number_width}}',
+                      # f'{str(np.array(vertex1_cyl)): <{number_width}}',
+                      # f'{str(round(vertex0_cyl[1] - vertex1_cyl[1], precision)): <{number_width}}',
+                      # f'{str(np.array(strut.spring_f_vec)): <{array_3_width}}'
+                      )
 
     @staticmethod
     def print_tendon_forces(self, f_tendon):
@@ -636,8 +747,9 @@ def tower_gradient(tune_params, cost_of_tune_params, epsilon):
 
 
 if __name__ == '__main__':
-    mode = 'stabilize prism tower'
-    # mode = 'hat rack 1.0'
+    # mode = 'stabilize prism tower'
+    mode = 'hat rack 1.0'
+
     if mode == 'hat rack 1.0':
         """ hourglass shaped hat rack """
         strut_count = 4
@@ -645,30 +757,40 @@ if __name__ == '__main__':
         # h_to_r = level_count * [3]
         dowel_length = 915  # in mm 1/2" wood dowel 36"
         bottom_extension = 30  # mm measured from tip of dowel to inside of hub (includes hub length)
-        bot_layer_top_extension = 250
-        mid_layer_top_extension = 250
-        top_layer_top_extension = 200
+        bot_layer_top_extension = 150
+        mid_layer_top_extension = 200
+        top_layer_top_extension = 150
         vv_bot_layer = dowel_length - bottom_extension - bot_layer_top_extension  # vv denotes vertex to vertex len
         vv_mid_layer = dowel_length - bottom_extension - mid_layer_top_extension
         vv_top_layer = dowel_length - bottom_extension - top_layer_top_extension
-        print('vv_bot_layer:', vv_bot_layer, 'vv_mid_layer:', vv_mid_layer, 'vv_top_layer:', vv_top_layer)
-        reference_radius = (vv_bot_layer / 2) * (635 / 887)  # fudge factor from trial run
+
+        # reference_radius = (vv_bot_layer / 2) * (635 / 887)  # fudge factor from trial run
+        # reference_radius = (vv_bot_layer / 2) * (735 / 992)  # fudge factor from trial run
+        reference_radius = (vv_bot_layer / 2) * (735 / 992) / 1000 # fudge factor from trial run
         r_off = 0.3 * reference_radius
-        radii = [1.1 * reference_radius + r_off, reference_radius - r_off] + \
-                [reference_radius - r_off, reference_radius - r_off] + \
-                [reference_radius - r_off, reference_radius + r_off]
-        h = [2 * reference_radius * (635 / 627),
-             (2 * reference_radius) * (635 / 545.3) * (635 / 610),
-             (2 * reference_radius) * (685 / 630) * (685 / 673)]
+        radii = ([1.1 * reference_radius + r_off, reference_radius - r_off] +
+                 [reference_radius - r_off, reference_radius - 0.5 * r_off] +
+                 [reference_radius - r_off, reference_radius + 0.5 * r_off])
+        hr_ratio = 1.9
+        h = [hr_ratio * reference_radius,
+             # (2 * reference_radius) * (635 / 545.3) * (635 / 610),
+             (hr_ratio * reference_radius) * (685 / 652),
+             # (hr_ratio * reference_radius) * (740 / 726)]
+             (hr_ratio * reference_radius) * (735 / 741)]
 
         l_twist = level_count * [math.pi * (1 / 2 - 1 / strut_count)]
+        # l_twist = [39.1708616024528, 87.12901164651083, 74.37206042351326]
         iface_twist = (level_count - 1) * [math.pi / strut_count]
+        # iface_twist = [0.5133620802101359, 38.16562202929235]
         # iface_overlap = (level_count - 1) * [0.25]
-        iface_overlap = (level_count - 1) * [0.35]
+        iface_overlap = (level_count - 1) * [0.1]
+        # iface_overlap = (level_count - 1) * [0.35]
+        # iface_overlap = [0.7711764824330524, 0.3923900917769677]
         # frc_strut = (level_count - 1) * [1.0, 1.1]
         frc_strut = level_count * [1.0]
-        f_interlayer_tendon = math.ceil((level_count - 1) / 2) * [0.2]  # interfaces 0, 2, 4... get f_interlayer_tendon
-        learn_rate = 0.006
+        # f_interlayer_tendon = math.ceil((level_count - 1) / 2) * [0.2]  # interfaces 0, 2, 4... get f_interlayer_tendon
+        f_interlayer_tendon = [0.10467084776281678]  # interfaces 0, 2, 4... get f_interlayer_tendon
+        learn_rate = 0.003
         # learn_rate_damping = 0.98
         learn_rate_damping = 0.97
         t_params = TowerTuneParams(n=strut_count, levels=level_count, height=h, radius=radii, level_twist=l_twist,
@@ -680,15 +802,18 @@ if __name__ == '__main__':
                                                     'interlayer tendon force'])
         param_hist, cost_hist, f_tendon_diff_hist, end_step, termination_msg = \
             stabilize_tower_grad_descent(t_params, learn_rate=learn_rate, learn_rate_damping=learn_rate_damping,
-                                         max_steps=200, max_cost=0.001, min_difference=1e-7, epsilon=1e-7, verbose=True)
-        thing = Tensegrity(*prism_tower(*param_hist[-1].build_args, verbose=False),
-                           name='prism')
-        final_cost, final_f_tendon_diff, final_f_tendon, final_f_virtual, final_success = thing.cost()
-        thing.print_tendon_forces(thing, final_f_tendon)
+                                         max_steps=500, max_cost=0.001, min_difference=1e-7, epsilon=1e-7, verbose=True)
+        o_thing = Tensegrity(*prism_tower(*param_hist[-1].build_args, verbose=False),
+                             name='prism')
+        final_cost, final_f_tendon_diff, final_f_tendon, final_f_virtual, final_success = o_thing.cost()
+        # Tensegrity.print_tendon_forces(thing, final_f_tendon)
         print('>>> f_virtual ', final_f_virtual)
-        thing.print_build(thing)
-        # thing.plot_gradient_descent(thing, param_hist, cost_hist, f_tendon_diff_hist)
-        # thing.plot()
+        Tensegrity.print_build_pandas(o_thing, param_hist[-1])
+        print('vv_bot_layer:', vv_bot_layer, 'vv_mid_layer:', vv_mid_layer, 'vv_top_layer:', vv_top_layer)
+        print('heights', h, 'total height less top extension', sum(h))
+        Tensegrity.plot_gradient_descent(o_thing, param_hist, cost_hist, f_tendon_diff_hist)
+        o_thing.plot()
+
     elif mode == 'stabilize prism tower':
         strut_count = 4
         level_count = 3
@@ -727,10 +852,10 @@ if __name__ == '__main__':
         param_hist, cost_hist, f_tendon_diff_hist, end_step, termination_msg = \
             stabilize_tower_grad_descent(t_params, learn_rate=learn_rate, learn_rate_damping=learn_rate_damping,
                                          max_steps=200, max_cost=0.001, min_difference=1e-7, epsilon=1e-7, verbose=True)
-        thing = Tensegrity(*prism_tower(*param_hist[-1].build_args, verbose=False),
-                           name='prism')
-        final_cost, final_f_tendon_diff, final_f_tendon, final_f_virtual, final_success = thing.cost()
-        thing.print_tendon_forces(thing, final_f_tendon)
+        o_thing = Tensegrity(*prism_tower(*param_hist[-1].build_args, verbose=False),
+                             name='prism')
+        final_cost, final_f_tendon_diff, final_f_tendon, final_f_virtual, final_success = o_thing.cost()
+        Tensegrity.print_tendon_forces(o_thing, final_f_tendon)
         print('>>> f_virtual ', final_f_virtual)
-        thing.plot_gradient_descent(thing, param_hist, cost_hist, f_tendon_diff_hist)
-        thing.plot()
+        Tensegrity.plot_gradient_descent(o_thing, param_hist, cost_hist, f_tendon_diff_hist)
+        o_thing.plot()
